@@ -62,6 +62,14 @@ jobs:
           cd ~/twrp
           repo sync -c --no-clone-bundle --no-tags -j2
 
+      - name: Use custom TWRP recovery source
+        run: |
+          cd ~/twrp
+          rm -rf bootable/recovery
+          git clone --depth=1 -b edk2-integration \
+            https://github.com/toufik01072002/android_bootable_recovery.git \
+            bootable/recovery
+
       - name: Add Samsung A20 tree
         run: |
           cd ~/twrp
