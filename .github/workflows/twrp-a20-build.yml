@@ -1,5 +1,5 @@
 
-name: Build TWRP Samsung A20
+name: Build TWRP Samsung A20 with EDK2 Integration
 
 on:
   workflow_dispatch:
@@ -13,7 +13,50 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build-edk2:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout EDK2 repo
+        uses: actions/checkout@v4
+        with:
+          repository: toufik01072002/edk2-exynos7885
+          path: edk2-exynos7885
+          submodules: recursive
+
+      - name: Install EDK2 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential uuid-dev acpica-tools git nasm \
+            python3 python3-setuptools gcc-aarch64-linux-gnu mkbootimg \
+            device-tree-compiler
+          sudo sed -i '/^from gki\.generate_gki_certificate import generate_gki_certificate$/d' /usr/bin/mkbootimg
+
+      - name: Clone EDK2 and edk2-platforms
+        run: |
+          cd edk2-exynos7885
+          git clone --recursive -b edk2-stable202605 https://github.com/tianocore/edk2
+          git clone https://github.com/tianocore/edk2-platforms.git
+          ls -la
+
+      - name: Build EDK2
+        working-directory: edk2-exynos7885
+        run: |
+          chmod +x *.sh
+          ./firstrun.sh
+          ./build.sh
+
+      - name: Upload EDK2 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: edk2-artifacts
+          path: |
+            edk2-exynos7885/workspace/UEFI
+            edk2-exynos7885/workspace/boot.img
+            edk2-exynos7885/workspace/boot.tar
+          retention-days: 7
+
+  build-twrp:
+    needs: build-edk2
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
@@ -61,6 +104,12 @@ jobs:
         run: |
           cd ~/twrp
           repo sync -c --no-clone-bundle --no-tags -j2
+
+      - name: Download EDK2 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: edk2-artifacts
+          path: edk2-artifacts
 
       - name: Use custom TWRP recovery source
         run: |
