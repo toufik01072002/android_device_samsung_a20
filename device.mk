@@ -11,7 +11,7 @@ PRODUCT_PRODUCT_PROPERTIES += \
 
 # EDK2/UEFI boot image - copy to recovery ramdisk for validation
 PRODUCT_COPY_FILES += \
-	$(LOCAL_PATH)/prebuilt/edk2_uefi:recovery/root/system/bin/edk2_uefi
+	$(LOCAL_PATH)/prebuilt/etc/edk2/boot.img:recovery/root/system/etc/edk2/boot.img
 
 # EDK2 verification script
 PRODUCT_COPY_FILES += \

@@ -1,4 +1,3 @@
-
 name: Build TWRP Samsung A20 with EDK2 Integration
 
 on:
@@ -50,38 +49,54 @@ jobs:
         run: |
           ls -la workspace/
           file workspace/boot.img
-          # Verify it's a valid boot image
+          # Verify Android boot magic
           dd if=workspace/boot.img bs=8 count=1 2>/dev/null | grep -q "ANDROID!" && echo "Boot magic OK" || (echo "Invalid boot image" && exit 1)
-          # Extract kernel size
-          KERNEL_SIZE=$(dd if=workspace/boot.img bs=1 skip=16 count=4 2>/dev/null | od -An -tx4 | tr -d ' \n')
+          # Read page_size from header (offset 0x24, 4 bytes LE)
+          PAGE_SIZE=$(dd if=workspace/boot.img bs=1 skip=36 count=4 2>/dev/null | od -An -tx4 | tr -d ' \n')
+          PAGE_SIZE=$((16#$PAGE_SIZE))
+          echo "Page size: $PAGE_SIZE"
+          if [ $PAGE_SIZE -ne 2048 ] && [ $PAGE_SIZE -ne 4096 ]; then
+            echo "Unexpected page size: $PAGE_SIZE"
+            exit 1
+          fi
+          # Extract kernel size (offset 0x08, 4 bytes LE) - Android boot header v0
+          KERNEL_SIZE=$(dd if=workspace/boot.img bs=1 skip=8 count=4 2>/dev/null | od -An -tx4 | tr -d ' \n')
           KERNEL_SIZE=$((16#$KERNEL_SIZE))
           echo "Kernel size: $KERNEL_SIZE bytes"
           if [ $KERNEL_SIZE -lt 1048576 ] || [ $KERNEL_SIZE -gt 16777216 ]; then
             echo "Kernel size out of range"
             exit 1
           fi
-          # Check for BootShim magic at kernel header offset 0x38 (standard Linux header)
-          dd if=workspace/boot.img bs=1 skip=$((2048 + 0x38)) count=4 2>/dev/null | grep -q "ARM@64" && echo "BootShim magic found at kernel offset 0x38" || (echo "BootShim magic not at offset 0x38" && exit 1)
-          # Check for UEFI FD signature at end of kernel
-          dd if=workspace/boot.img bs=1 skip=$((2048 + KERNEL_SIZE - 4096)) count=4096 2>/dev/null | grep -q "_FVH" && echo "UEFI FD signature found" || (echo "UEFI FD signature not found" && exit 1)
+          # Check for BootShim magic at offset 0x38 from kernel start (4 bytes: 41 52 4d 64 = "ARMd" = 0x644D5241 LE)
+          KERNEL_START=$PAGE_SIZE
+          BOOTSHIM_OFFSET=$((KERNEL_START + 0x38))
+          dd if=workspace/boot.img bs=1 skip=$BOOTSHIM_OFFSET count=4 2>/dev/null | od -An -tx1 | grep -q "41 52 4d 64" && echo "BootShim magic found at offset 0x38" || (echo "BootShim magic not found at offset 0x38" && exit 1)
+          # Search for _FVH signature in the kernel region (after kernel header)
+          # Search from kernel start + 0x100 to kernel start + kernel_size
+          dd if=workspace/boot.img bs=1 skip=$((KERNEL_START + 0x100)) count=$((KERNEL_SIZE - 0x100)) 2>/dev/null | grep -q "_FVH" && echo "UEFI FD signature (_FVH) found" || (echo "UEFI FD signature not found" && exit 1)
 
-      - name: Generate SHA256 checksums
+      - name: Prepare artifact staging
         working-directory: edk2-exynos7885
         run: |
-          sha256sum workspace/UEFI > workspace/UEFI.sha256
-          sha256sum workspace/boot.img > workspace/boot.img.sha256
-          sha256sum workspace/boot.tar > workspace/boot.tar.sha256
-          cat workspace/*.sha256
+          mkdir -p artifact-staging
+          cp workspace/UEFI artifact-staging/
+          cp workspace/boot.img artifact-staging/
+          cp workspace/boot.tar artifact-staging/
+          ls -la artifact-staging/
+
+      - name: Generate SHA256SUMS
+        working-directory: edk2-exynos7885
+        run: |
+          cd artifact-staging
+          sha256sum UEFI boot.img boot.tar > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Upload EDK2 artifacts
         uses: actions/upload-artifact@v4
         with:
           name: edk2-artifacts
           path: |
-            edk2-exynos7885/workspace/UEFI
-            edk2-exynos7885/workspace/boot.img
-            edk2-exynos7885/workspace/boot.tar
-            edk2-exynos7885/workspace/*.sha256
+            edk2-exynos7885/artifact-staging/
           retention-days: 7
 
   build-twrp:
@@ -140,17 +155,41 @@ jobs:
           name: edk2-artifacts
           path: edk2-artifacts
 
-      - name: Copy EDK2 boot.img to device tree prebuilt
+      - name: Clone Samsung A20 device tree
         run: |
-          cp edk2-artifacts/boot.img ~/twrp/device/samsung/a20/prebuilt/edk2_uefi
-          chmod +x ~/twrp/device/samsung/a20/prebuilt/edk2_uefi
-          # Also copy edk2_verify.sh from device tree (already in repo)
-          ls -la ~/twrp/device/samsung/a20/prebuilt/
+          cd ~/twrp
+          mkdir -p device/samsung
+          git clone --depth=1 -b android-11 \
+            https://github.com/toufik01072002/android_device_samsung_a20.git \
+            device/samsung/a20
+
+      - name: Verify EDK2 artifacts exist
+        run: |
+          ls -la edk2-artifacts/
+          test -f edk2-artifacts/boot.img || (echo "boot.img not found in artifacts" && exit 1)
+          test -f edk2-artifacts/SHA256SUMS || (echo "SHA256SUMS not found" && exit 1)
 
       - name: Verify EDK2 artifacts checksums
         run: |
           cd edk2-artifacts
-          sha256sum -c *.sha256 && echo "All checksums verified" || (echo "Checksum verification failed" && exit 1)
+          sha256sum -c SHA256SUMS && echo "All checksums verified" || (echo "Checksum verification failed" && exit 1)
+
+      - name: Copy EDK2 boot.img to device tree prebuilt
+        run: |
+          mkdir -p ~/twrp/device/samsung/a20/prebuilt/etc/edk2
+          cp edk2-artifacts/boot.img ~/twrp/device/samsung/a20/prebuilt/etc/edk2/boot.img
+          # Verify copy integrity: compare SHA256 of original and copy
+          ORIGINAL_SHA256=$(sha256sum edk2-artifacts/boot.img | cut -d' ' -f1)
+          COPY_SHA256=$(sha256sum ~/twrp/device/samsung/a20/prebuilt/etc/edk2/boot.img | cut -d' ' -f1)
+          if [ "$ORIGINAL_SHA256" = "$COPY_SHA256" ]; then
+            echo "Copy verified: SHA256 matches"
+          else
+            echo "Copy verification failed: SHA256 mismatch"
+            echo "Original: $ORIGINAL_SHA256"
+            echo "Copy:     $COPY_SHA256"
+            exit 1
+          fi
+          ls -la ~/twrp/device/samsung/a20/prebuilt/etc/edk2/
 
       - name: Use custom TWRP recovery source
         run: |
@@ -159,14 +198,6 @@ jobs:
           git clone --depth=1 -b edk2-integration \
             https://github.com/toufik01072002/android_bootable_recovery.git \
             bootable/recovery
-
-      - name: Add Samsung A20 tree
-        run: |
-          cd ~/twrp
-          mkdir -p device/samsung
-          git clone --depth=1 -b android-11 \
-            https://github.com/toufik01072002/android_device_samsung_a20.git \
-            device/samsung/a20
 
       - name: Compile recovery
         run: |
@@ -185,14 +216,13 @@ jobs:
           sudo apt-get update && sudo apt-get install -y abootimg
           # Extract recovery image
           abootimg -x ~/twrp/out/target/product/a20/recovery.img
-          # Check for edk2 files in ramdisk
-          if [ -f ramdisk/system/bin/edk2_uefi ]; then
-            echo "edk2_uefi found in recovery ramdisk"
-            file ramdisk/system/bin/edk2_uefi
+          # Check for EDK2 boot image in recovery ramdisk
+          if [ -f ramdisk/system/etc/edk2/boot.img ]; then
+            echo "EDK2 boot.img found in recovery ramdisk"
+            file ramdisk/system/etc/edk2/boot.img
           else
-            echo "ERROR: edk2_uefi NOT found in recovery ramdisk"
-            # List what's in system/bin
-            find ramdisk/system/bin -name "edk2*" 2>/dev/null || echo "No edk2* files found"
+            echo "ERROR: EDK2 boot.img NOT found in recovery ramdisk"
+            find ramdisk/system -name "boot.img" 2>/dev/null || echo "No boot.img found"
             exit 1
           fi
           if [ -f ramdisk/system/bin/edk2_verify.sh ]; then
