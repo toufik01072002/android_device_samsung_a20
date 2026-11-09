@@ -33,9 +33,10 @@ jobs:
       - name: Clone EDK2 and edk2-platforms
         run: |
           cd edk2-exynos7885
-          git clone --recursive -b edk2-stable202605 https://github.com/tianocore/edk2
-          git clone https://github.com/tianocore/edk2-platforms.git
-          ls -la
+          git clone --recursive -b edk2-stable202605 https://github.com/tianocore/edk2 ../edk2
+          git clone https://github.com/tianocore/edk2-platforms.git ../edk2-platforms
+          test -f ../edk2/edksetup.sh
+          echo "EDK2 setup verified"
 
       - name: Build EDK2
         working-directory: edk2-exynos7885
