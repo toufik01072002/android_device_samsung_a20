@@ -45,6 +45,34 @@ jobs:
           ./firstrun.sh
           ./build.sh
 
+      - name: Verify EDK2 boot.img
+        working-directory: edk2-exynos7885
+        run: |
+          ls -la workspace/
+          file workspace/boot.img
+          # Verify it's a valid boot image
+          dd if=workspace/boot.img bs=8 count=1 2>/dev/null | grep -q "ANDROID!" && echo "Boot magic OK" || (echo "Invalid boot image" && exit 1)
+          # Extract kernel size
+          KERNEL_SIZE=$(dd if=workspace/boot.img bs=1 skip=16 count=4 2>/dev/null | od -An -tx4 | tr -d ' \n')
+          KERNEL_SIZE=$((16#$KERNEL_SIZE))
+          echo "Kernel size: $KERNEL_SIZE bytes"
+          if [ $KERNEL_SIZE -lt 1048576 ] || [ $KERNEL_SIZE -gt 16777216 ]; then
+            echo "Kernel size out of range"
+            exit 1
+          fi
+          # Check for BootShim magic
+          dd if=workspace/boot.img bs=1 skip=2048 count=4096 2>/dev/null | grep -q "ARM@64" && echo "BootShim magic found" || echo "BootShim magic not at offset 128, checking offset 0..."
+          dd if=workspace/boot.img bs=1 skip=2048 count=4 2>/dev/null | grep -q "ARM@64" && echo "BootShim magic at offset 0" || echo "Checking for UEFI FD signature..."
+          dd if=workspace/boot.img bs=1 skip=$((2048 + KERNEL_SIZE - 4096)) count=4096 2>/dev/null | grep -q "_FVH" && echo "UEFI FD signature found" || echo "UEFI FD signature not found"
+
+      - name: Generate SHA256 checksums
+        working-directory: edk2-exynos7885
+        run: |
+          sha256sum workspace/UEFI > workspace/UEFI.sha256
+          sha256sum workspace/boot.img > workspace/boot.img.sha256
+          sha256sum workspace/boot.tar > workspace/boot.tar.sha256
+          cat workspace/*.sha256
+
       - name: Upload EDK2 artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -53,6 +81,7 @@ jobs:
             edk2-exynos7885/workspace/UEFI
             edk2-exynos7885/workspace/boot.img
             edk2-exynos7885/workspace/boot.tar
+            edk2-exynos7885/workspace/*.sha256
           retention-days: 7
 
   build-twrp:
@@ -111,6 +140,17 @@ jobs:
           name: edk2-artifacts
           path: edk2-artifacts
 
+      - name: Copy EDK2 boot.img to device tree prebuilt
+        run: |
+          cp edk2-artifacts/boot.img ~/twrp/device/samsung/a20/prebuilt/edk2_uefi
+          chmod +x ~/twrp/device/samsung/a20/prebuilt/edk2_uefi
+          ls -la ~/twrp/device/samsung/a20/prebuilt/
+
+      - name: Verify EDK2 artifacts checksums
+        run: |
+          cd edk2-artifacts
+          sha256sum -c *.sha256 && echo "All checksums verified" || (echo "Checksum verification failed" && exit 1)
+
       - name: Use custom TWRP recovery source
         run: |
           cd ~/twrp
@@ -135,6 +175,35 @@ jobs:
           lunch twrp_a20-eng
           mka recoveryimage -j2
 
+      - name: Verify recovery image contains EDK2 files
+        run: |
+          # Extract and check recovery ramdisk using abootimg
+          mkdir -p /tmp/recovery_extract
+          cd /tmp/recovery_extract
+          # Install abootimg for extraction
+          sudo apt-get update && sudo apt-get install -y abootimg
+          # Extract recovery image
+          abootimg -x ~/twrp/out/target/product/a20/recovery.img
+          # Check for edk2 files in ramdisk
+          if [ -f ramdisk/system/bin/edk2_uefi ]; then
+            echo "edk2_uefi found in recovery ramdisk"
+            file ramdisk/system/bin/edk2_uefi
+          else
+            echo "WARNING: edk2_uefi NOT found in recovery ramdisk"
+            # List what's in system/bin
+            find ramdisk/system/bin -name "edk2*" 2>/dev/null || echo "No edk2* files found"
+          fi
+          if [ -f ramdisk/system/bin/edk2_verify.sh ]; then
+            echo "edk2_verify.sh found in recovery ramdisk"
+          else
+            echo "WARNING: edk2_verify.sh NOT found in recovery ramdisk"
+          fi
+
+      - name: Generate recovery SHA256
+        run: |
+          sha256sum ~/twrp/out/target/product/a20/recovery.img > ~/twrp/out/target/product/a20/recovery.img.sha256
+          cat ~/twrp/out/target/product/a20/recovery.img.sha256
+
       - name: Upload recovery image
         if: always()
         uses: actions/upload-artifact@v4
@@ -142,5 +211,6 @@ jobs:
           name: TWRP-A20-recovery
           path: |
             ~/twrp/out/target/product/a20/recovery.img
+            ~/twrp/out/target/product/a20/recovery.img.sha256
           if-no-files-found: warn
           retention-days: 7

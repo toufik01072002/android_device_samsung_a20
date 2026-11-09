@@ -1,0 +1,7 @@
+#!/bin/sh
+# EDK2 UEFI binary placeholder
+# This file will be replaced by the actual EDK2 boot image during build
+# Do not ship this placeholder - it will be overwritten by the build process
+
+echo "ERROR: EDK2 UEFI binary not built yet. Run EDK2 build first."
+exit 1
