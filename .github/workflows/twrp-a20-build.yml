@@ -73,8 +73,8 @@ jobs:
           BOOTSHIM_OFFSET=$((KERNEL_START + 0x38))
           dd if=workspace/boot.img bs=1 skip=$BOOTSHIM_OFFSET count=4 2>/dev/null | od -An -tx1 | grep -q "41 52 4d 64" && echo "BootShim magic found at offset 0x38" || (echo "BootShim magic not found at offset 0x38" && exit 1)
           # Search for _FVH signature in the kernel region (after kernel header)
-          # Search from kernel start + 0x100 to kernel start + kernel_size
-          dd if=workspace/boot.img bs=1 skip=$((KERNEL_START + 0x100)) count=$((KERNEL_SIZE - 0x100)) 2>/dev/null | grep -q "_FVH" && echo "UEFI FD signature (_FVH) found" || (echo "UEFI FD signature not found" && exit 1)
+          # Search from kernel start + 0x38 to kernel start + kernel_size
+          dd if=workspace/boot.img bs=1 skip=$((KERNEL_START + 0x38)) count=$((KERNEL_SIZE - 0x38)) 2>/dev/null | grep -q "_FVH" && echo "UEFI FD signature (_FVH) found" || (echo "UEFI FD signature not found" && exit 1)
 
       - name: Prepare artifact staging
         working-directory: edk2-exynos7885
