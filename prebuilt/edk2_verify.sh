@@ -1,6 +1,7 @@
 #!/bin/sh
 # EDK2 verification script for Samsung SM-A205W
 # Validates EDK2 boot image on boot partition
+# FAIL-CLOSED: Any failure results in non-zero exit
 
 BOOT_PARTITION="/dev/block/by-name/boot"
 EXPECTED_KERNEL_MAGIC="ANDROID!"
@@ -54,6 +55,9 @@ info "Kernel size within expected range"
 # Calculate SHA256 of kernel portion
 KERNEL_OFFSET=2048  # page size
 KERNEL_DATA=$(dd if="$BOOT_PARTITION" bs=1 skip=$KERNEL_OFFSET count=$KERNEL_SIZE 2>/dev/null)
+if [ ${#KERNEL_DATA} -ne $KERNEL_SIZE ]; then
+    error "Failed to read complete kernel data"
+fi
 KERNEL_SHA256=$(echo -n "$KERNEL_DATA" | sha256sum | cut -d' ' -f1)
 info "Kernel SHA256: $KERNEL_SHA256"
 
@@ -70,37 +74,49 @@ if [ -f /system/build.prop ]; then
         error "Device mismatch: expected a20/a205w, got $DEVICE"
     fi
     info "Device verified: $DEVICE"
+else
+    error "Cannot read /system/build.prop for device verification"
 fi
 
 # Check EDK2 specific signature in kernel (BootShim + UEFI FD)
 # BootShim is at offset 0 in kernel, UEFI FD follows
-# Check for BootShim ARM64 magic at kernel offset 0x80 (after Linux header)
+# Check for BootShim ARM64 magic at kernel offset 0x38 (standard Linux header)
 KERNEL_FIRST_PAGE=$(dd if="$BOOT_PARTITION" bs=1 skip=$KERNEL_OFFSET count=4096 2>/dev/null)
-if echo -n "$KERNEL_FIRST_PAGE" | grep -q "ARM@64"; then
-    info "BootShim ARM64 magic found in kernel"
+if [ ${#KERNEL_FIRST_PAGE} -lt 60 ]; then
+    error "Failed to read kernel header"
+fi
+
+# Check BootShim ARM64 magic "ARM\x64" at standard Linux header offset 0x38
+if echo -n "$KERNEL_FIRST_PAGE" | dd bs=1 skip=56 count=4 2>/dev/null | grep -q "ARM@64"; then
+    info "BootShim ARM64 magic found at kernel header offset 0x38"
 else
     # Check at offset 0 of kernel (if no Linux header)
-    if echo -n "$KERNEL_FIRST_PAGE" | dd bs=1 skip=128 count=8 2>/dev/null | grep -q "ARM@64"; then
-        info "BootShim ARM64 magic found at offset 128"
+    if echo -n "$KERNEL_FIRST_PAGE" | dd bs=1 count=4 2>/dev/null | grep -q "ARM@64"; then
+        info "BootShim ARM64 magic found at kernel offset 0"
     else
         error "BootShim ARM64 magic not found - not an EDK2 boot image"
     fi
 fi
 
-# Verify UEFI FD signature (PE/COFF)
-UEFI_FD_OFFSET=$((KERNEL_OFFSET + KERNEL_SIZE - 2097152))  # 2 MiB from end (UEFI FD size)
+# Verify UEFI FD signature (_FVH) in last 4KB of kernel
+UEFI_FD_OFFSET=$((KERNEL_OFFSET + KERNEL_SIZE - 4096))
 if [ $UEFI_FD_OFFSET -gt $KERNEL_OFFSET ]; then
-    UEFI_FD_DATA=$(dd if="$BOOT_PARTITION" bs=1 skip=$UEFI_FD_OFFSET count=2097152 2>/dev/null)
-    if echo -n "$UEFI_FD_DATA" | dd bs=1 count=4 2>/dev/null | grep -q "MZ"; then
-        info "UEFI FD PE/COFF signature (MZ) found"
+    UEFI_FD_DATA=$(dd if="$BOOT_PARTITION" bs=1 skip=$UEFI_FD_OFFSET count=4096 2>/dev/null)
+    if [ ${#UEFI_FD_DATA} -lt 4096 ]; then
+        error "Failed to read UEFI FD region"
+    fi
+    if echo -n "$UEFI_FD_DATA" | grep -q "_FVH"; then
+        info "UEFI Firmware Volume signature (_FVH) found"
     else
-        # Check for FV signature
-        if echo -n "$UEFI_FD_DATA" | grep -q "_FVH"; then
-            info "UEFI Firmware Volume signature (_FVH) found"
+        # Check for PE/COFF MZ signature as fallback
+        if echo -n "$UEFI_FD_DATA" | dd bs=1 count=2 2>/dev/null | grep -q "MZ"; then
+            info "UEFI FD PE/COFF signature (MZ) found"
         else
-            error "UEFI FD signature not found"
+            error "UEFI FD signature (_FVH or MZ) not found"
         fi
     fi
+else
+    error "Invalid UEFI FD offset calculation"
 fi
 
 # All checks passed

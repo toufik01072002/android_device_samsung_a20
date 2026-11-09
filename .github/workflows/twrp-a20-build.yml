@@ -60,10 +60,10 @@ jobs:
             echo "Kernel size out of range"
             exit 1
           fi
-          # Check for BootShim magic
-          dd if=workspace/boot.img bs=1 skip=2048 count=4096 2>/dev/null | grep -q "ARM@64" && echo "BootShim magic found" || echo "BootShim magic not at offset 128, checking offset 0..."
-          dd if=workspace/boot.img bs=1 skip=2048 count=4 2>/dev/null | grep -q "ARM@64" && echo "BootShim magic at offset 0" || echo "Checking for UEFI FD signature..."
-          dd if=workspace/boot.img bs=1 skip=$((2048 + KERNEL_SIZE - 4096)) count=4096 2>/dev/null | grep -q "_FVH" && echo "UEFI FD signature found" || echo "UEFI FD signature not found"
+          # Check for BootShim magic at kernel header offset 0x38 (standard Linux header)
+          dd if=workspace/boot.img bs=1 skip=$((2048 + 0x38)) count=4 2>/dev/null | grep -q "ARM@64" && echo "BootShim magic found at kernel offset 0x38" || (echo "BootShim magic not at offset 0x38" && exit 1)
+          # Check for UEFI FD signature at end of kernel
+          dd if=workspace/boot.img bs=1 skip=$((2048 + KERNEL_SIZE - 4096)) count=4096 2>/dev/null | grep -q "_FVH" && echo "UEFI FD signature found" || (echo "UEFI FD signature not found" && exit 1)
 
       - name: Generate SHA256 checksums
         working-directory: edk2-exynos7885
@@ -144,6 +144,7 @@ jobs:
         run: |
           cp edk2-artifacts/boot.img ~/twrp/device/samsung/a20/prebuilt/edk2_uefi
           chmod +x ~/twrp/device/samsung/a20/prebuilt/edk2_uefi
+          # Also copy edk2_verify.sh from device tree (already in repo)
           ls -la ~/twrp/device/samsung/a20/prebuilt/
 
       - name: Verify EDK2 artifacts checksums
@@ -189,14 +190,16 @@ jobs:
             echo "edk2_uefi found in recovery ramdisk"
             file ramdisk/system/bin/edk2_uefi
           else
-            echo "WARNING: edk2_uefi NOT found in recovery ramdisk"
+            echo "ERROR: edk2_uefi NOT found in recovery ramdisk"
             # List what's in system/bin
             find ramdisk/system/bin -name "edk2*" 2>/dev/null || echo "No edk2* files found"
+            exit 1
           fi
           if [ -f ramdisk/system/bin/edk2_verify.sh ]; then
             echo "edk2_verify.sh found in recovery ramdisk"
           else
-            echo "WARNING: edk2_verify.sh NOT found in recovery ramdisk"
+            echo "ERROR: edk2_verify.sh NOT found in recovery ramdisk"
+            exit 1
           fi
 
       - name: Generate recovery SHA256
