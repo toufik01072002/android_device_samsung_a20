@@ -126,9 +126,9 @@ else
 fi
 
 # Search for UEFI FD signature (_FVH) in kernel region after header
-# Search from kernel_start + 0x100 to kernel_start + kernel_size
-UEFI_SEARCH_START=$((KERNEL_START + 256))
-UEFI_SEARCH_SIZE=$((KERNEL_SIZE - 256))
+# Search from kernel_start + 0x38 to kernel_start + kernel_size
+UEFI_SEARCH_START=$((KERNEL_START + 56))
+UEFI_SEARCH_SIZE=$((KERNEL_SIZE - 56))
 if [ "$UEFI_SEARCH_SIZE" -le 0 ]; then
     error "Kernel too small for UEFI FD search"
 fi
