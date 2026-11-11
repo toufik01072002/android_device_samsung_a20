@@ -16,3 +16,7 @@ PRODUCT_COPY_FILES += \
 # EDK2 verification script
 PRODUCT_COPY_FILES += \
 	$(LOCAL_PATH)/prebuilt/edk2_verify.sh:recovery/root/system/bin/edk2_verify.sh
+
+# Kexec ARM64 - Samsung Exynos 7885
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/kexec/exynos7885.dtb:recovery/root/system/etc/kexec/exynos7885.dtb
