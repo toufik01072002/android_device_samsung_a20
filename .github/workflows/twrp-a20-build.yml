@@ -33,7 +33,7 @@ jobs:
           do
             echo "===== MIRROR: $url ====="
 
-            for pocket in noble noble-security; do
+            for pocket in noble noble-updates noble-backports noble-security; do
               echo "--- $pocket ---"
 
               curl -sS -L \
@@ -52,16 +52,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "===== Configure Ubuntu mirrors ====="
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/apt-mirrors.txt
-            cat /etc/apt/apt-mirrors.txt
-          fi
+          echo "===== Configure verified Ubuntu mirrors ====="
 
-          for f in /etc/apt/sources.list.d/*.sources; do
-            [ -f "$f" ] || continue
-            sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$f"
-          done
+          sudo tee /etc/apt/apt-mirrors.txt >/dev/null <<'EOF'
+https://mirrors.edge.kernel.org/ubuntu/ priority:1
+https://mirror.math.princeton.edu/pub/ubuntu/ priority:2
+https://ubuntu.mirror.constant.com/ubuntu/ priority:3
+EOF
+
+          cat /etc/apt/apt-mirrors.txt
 
           echo "===== APT update ====="
           date -u
