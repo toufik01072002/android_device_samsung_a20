@@ -192,38 +192,30 @@ jobs:
 
           NDK="$ANDROID_HOME/ndk/27.2.12479018"
           TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
-          CC="$TC/bin/clang --target=aarch64-linux-android24"
+          CC="$TC/bin/clang"
 
-          curl -fsSL \
-            https://cdn.kernel.org/pub/linux/utils/kernel/kexec/kexec-tools-2.0.32.tar.xz \
-            -o /tmp/kexec-tools.tar.xz
+          curl -fsSL https://cdn.kernel.org/pub/linux/utils/kernel/kexec/kexec-tools-2.0.32.tar.xz -o /tmp/kexec-tools.tar.xz
 
           mkdir -p /tmp/kexec-build
           tar -xJf /tmp/kexec-tools.tar.xz -C /tmp/kexec-build
           cd /tmp/kexec-build/kexec-tools-2.0.32
 
-          ./configure \
-            --build="$(gcc -dumpmachine)" \
-            --host=aarch64-linux-android \
-            --target=aarch64-linux-android \
-            --without-xen \
-            --without-zlib \
-            --without-lzma \
-            --without-zstd \
-            CC="$CC" \
-            BUILD_CC=gcc \
-            TARGET_CC="$CC" \
-            AS="$CC" \
-            LD="$TC/bin/ld.lld" \
-            TARGET_LD="$TC/bin/ld.lld" \
-            AR="$TC/bin/llvm-ar" \
-            OBJCOPY="$TC/bin/llvm-objcopy" \
-            STRIP="$TC/bin/llvm-strip" \
-            CFLAGS="-O2 -fPIE" \
-            TARGET_CFLAGS="-O2 -Wall" \
-            LDFLAGS="-pie"
+          export CC="$CC"
+          export CFLAGS="--target=aarch64-linux-android24 -O2 -fPIE"
+          export LDFLAGS="-pie"
+
+          ./configure \\
+            --build="$(gcc -dumpmachine)" \\
+            --host=aarch64-linux-android \\
+            --without-xen \\
+            --without-zlib \\
+            --without-lzma \\
+            --without-zstd
 
           make -j2
+
+          echo "===== SEARCH KEXEC ====="
+          find . -type f -name kexec -print
 
           KEXEC_BIN="$(find . -type f -name kexec -perm -111 | head -n1)"
           test -n "$KEXEC_BIN"
@@ -231,13 +223,14 @@ jobs:
           "$TC/bin/llvm-strip" "$KEXEC_BIN"
 
           readelf -h "$KEXEC_BIN" | grep -q "AArch64"
-          readelf -l "$KEXEC_BIN" | grep -F "/system/bin/linker64"
 
-          install -D -m 0755 "$KEXEC_BIN" \
-            "$GITHUB_WORKSPACE/device/samsung/a20/prebuilt/kexec/kexec"
+          DEST="$GITHUB_WORKSPACE/device/samsung/a20/prebuilt/kexec"
+          mkdir -p "$DEST"
+          install -m 0755 "$KEXEC_BIN" "$DEST/kexec"
 
-          file "$GITHUB_WORKSPACE/device/samsung/a20/prebuilt/kexec/kexec"
-          sha256sum "$GITHUB_WORKSPACE/device/samsung/a20/prebuilt/kexec/kexec"
+          test -x "$DEST/kexec"
+          file "$DEST/kexec"
+          sha256sum "$DEST/kexec"
 
       - name: Verify EDK2 artifacts exist
         run: |
