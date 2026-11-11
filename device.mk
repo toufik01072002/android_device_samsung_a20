@@ -19,4 +19,5 @@ PRODUCT_COPY_FILES += \
 
 # Kexec ARM64 - Samsung Exynos 7885
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/prebuilt/kexec/exynos7885.dtb:recovery/root/system/etc/kexec/exynos7885.dtb
+    $(LOCAL_PATH)/prebuilt/kexec/exynos7885.dtb:recovery/root/system/etc/kexec/exynos7885.dtb \
+    $(LOCAL_PATH)/prebuilt/kexec/kexec:recovery/root/system/bin/kexec
