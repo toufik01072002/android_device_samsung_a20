@@ -22,6 +22,23 @@ jobs:
           path: edk2-exynos7885
           submodules: recursive
 
+      - name: Diagnose Ubuntu mirror DNS
+        run: |
+          set +e
+
+          for host in \
+            archive.ubuntu.com \
+            mirrors.edge.kernel.org \
+            mirror.math.princeton.edu \
+            ubuntu.mirror.constant.com \
+            security.ubuntu.com
+          do
+            echo "===== $host ====="
+            timeout 6s getent ahostsv4 "$host"
+            rc=$?
+            echo "DNS_EXIT=$rc"
+          done
+
       - name: Install EDK2 dependencies
         run: |
           set -euo pipefail
