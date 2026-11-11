@@ -170,6 +170,12 @@ jobs:
           echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> "$GITHUB_ENV"
 
+      - name: Setup JDK 17 for Android SDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Install Android command-line tools
         uses: android-actions/setup-android@v3
         with:
@@ -268,6 +274,12 @@ jobs:
           git clone --depth=1 -b edk2-integration \
             https://github.com/toufik01072002/android_bootable_recovery.git \
             bootable/recovery
+
+      - name: Restore JDK 11 for TWRP
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
 
       - name: Compile recovery
         run: |
