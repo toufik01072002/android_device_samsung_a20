@@ -115,6 +115,19 @@ jobs:
           sudo apt-get clean
           df -h /
 
+      - name: Retry Ubuntu APT update
+        run: |
+          set -e
+          for attempt in 1 2 3 4 5; do
+            echo "APT update attempt $attempt/5"
+            if sudo apt-get update; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "APT update failed after 5 attempts"
+          exit 1
+
       - name: Install dependencies
         run: |
           sudo apt-get update
