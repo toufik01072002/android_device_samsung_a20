@@ -2,6 +2,12 @@ name: Build TWRP Samsung A20 with EDK2 Integration
 
 on:
   workflow_dispatch:
+    inputs:
+      reuse_edk2_run_id:
+        description: "Run ID contenant l'artefact EDK2 à réutiliser"
+        required: false
+        default: "43064150201"
+        type: string
   push:
     branches:
       - android-11
@@ -9,10 +15,12 @@ on:
       - ".github/workflows/twrp-a20-build.yml"
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
   build-edk2:
+    if: ${{ inputs.reuse_edk2_run_id == '' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout EDK2 repo
@@ -158,6 +166,7 @@ jobs:
 
   build-twrp:
     needs: build-edk2
+    if: ${{ always() && (needs.build-edk2.result == 'success' || needs.build-edk2.result == 'skipped') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
@@ -219,7 +228,18 @@ jobs:
           cd ~/twrp
           repo sync -c --no-clone-bundle --no-tags -j2
 
-      - name: Download EDK2 artifacts
+      - name: Download EDK2 artifacts from previous run
+        if: ${{ inputs.reuse_edk2_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: edk2-artifacts
+          path: edk2-artifacts
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.reuse_edk2_run_id }}
+
+      - name: Download EDK2 artifacts from current run
+        if: ${{ inputs.reuse_edk2_run_id == '' }}
         uses: actions/download-artifact@v4
         with:
           name: edk2-artifacts
@@ -296,7 +316,7 @@ jobs:
 
           readelf -h "$KEXEC_BIN" | grep -q "AArch64"
 
-          DEST="$GITHUB_WORKSPACE/device/samsung/a20/prebuilt/kexec"
+          DEST="$HOME/twrp/device/samsung/a20/prebuilt/kexec"
           mkdir -p "$DEST"
           install -m 0755 "$KEXEC_BIN" "$DEST/kexec"
 
