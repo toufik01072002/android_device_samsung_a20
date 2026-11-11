@@ -192,7 +192,7 @@ jobs:
 
           NDK="$ANDROID_HOME/ndk/27.2.12479018"
           TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
-          CC="$TC/bin/clang --target=aarch64-linux-android21"
+          CC="$TC/bin/clang --target=aarch64-linux-android24"
 
           curl -fsSL \
             https://cdn.kernel.org/pub/linux/utils/kernel/kexec/kexec-tools-2.0.32.tar.xz \
