@@ -275,6 +275,35 @@ jobs:
           yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null
           sdkmanager --sdk_root="$ANDROID_HOME" "ndk;27.2.12479018"
 
+      - name: Build Zinitix A20 touchscreen firmware
+        run: |
+          set -euo pipefail
+
+          KERNEL_DIR="$HOME/kernel-firmware-src"
+          DEVICE_DIR="$HOME/twrp/device/samsung/a20"
+          NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          OBJCOPY="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objcopy"
+
+          git clone --depth=1 -b kexec-arm64-4.4-d-work \
+            https://github.com/toufik01072002/Kernel_SM-A205W.git \
+            "$KERNEL_DIR"
+
+          SRC="$KERNEL_DIR/firmware/tsp_zinitix/zt7548_a20.fw.ihex"
+          DEST="$DEVICE_DIR/prebuilt/firmware/tsp_zinitix/zt7548_a20.fw"
+
+          test -s "$SRC"
+          test -x "$OBJCOPY"
+
+          mkdir -p "$(dirname "$DEST")"
+          "$OBJCOPY" -Iihex -Obinary "$SRC" "$DEST"
+
+          test -s "$DEST"
+          chmod 0644 "$DEST"
+
+          echo "===== ZINITIX FIRMWARE ====="
+          ls -lh "$DEST"
+          sha256sum "$DEST"
+
       - name: Build kexec-tools for Android ARM64
         run: |
           set -euo pipefail

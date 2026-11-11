@@ -21,3 +21,8 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/kexec/exynos7885.dtb:recovery/root/system/etc/kexec/exynos7885.dtb \
     $(LOCAL_PATH)/prebuilt/kexec/kexec:recovery/root/system/bin/kexec
+
+
+# Zinitix A20 touchscreen firmware
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/firmware/tsp_zinitix/zt7548_a20.fw:recovery/root/lib/firmware/tsp_zinitix/zt7548_a20.fw
