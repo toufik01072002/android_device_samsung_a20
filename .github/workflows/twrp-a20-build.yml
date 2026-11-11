@@ -22,21 +22,30 @@ jobs:
           path: edk2-exynos7885
           submodules: recursive
 
-      - name: Diagnose Ubuntu mirror DNS
+      - name: Test Ubuntu mirror connectivity
         run: |
           set +e
 
-          for host in \
-            archive.ubuntu.com \
-            mirrors.edge.kernel.org \
-            mirror.math.princeton.edu \
-            ubuntu.mirror.constant.com \
-            security.ubuntu.com
+          for url in \
+            https://mirrors.edge.kernel.org/ubuntu \
+            https://mirror.math.princeton.edu/pub/ubuntu \
+            https://ubuntu.mirror.constant.com/ubuntu
           do
-            echo "===== $host ====="
-            timeout 6s getent ahostsv4 "$host"
-            rc=$?
-            echo "DNS_EXIT=$rc"
+            echo "===== MIRROR: $url ====="
+
+            for pocket in noble noble-security; do
+              echo "--- $pocket ---"
+
+              curl -sS -L \
+                --connect-timeout 5 \
+                --max-time 12 \
+                -o /dev/null \
+                -w 'HTTP_CODE=%{http_code} CONNECT=%{time_connect}s TOTAL=%{time_total}s\n' \
+                "$url/dists/$pocket/InRelease"
+
+              rc=$?
+              echo "CURL_EXIT=$rc"
+            done
           done
 
       - name: Install EDK2 dependencies
