@@ -55,10 +55,10 @@ jobs:
           echo "===== Configure verified Ubuntu mirrors ====="
 
           sudo tee /etc/apt/apt-mirrors.txt >/dev/null <<'EOF'
-https://mirrors.edge.kernel.org/ubuntu/ priority:1
-https://mirror.math.princeton.edu/pub/ubuntu/ priority:2
-https://ubuntu.mirror.constant.com/ubuntu/ priority:3
-EOF
+          https://mirrors.edge.kernel.org/ubuntu/ priority:1
+          https://mirror.math.princeton.edu/pub/ubuntu/ priority:2
+          https://ubuntu.mirror.constant.com/ubuntu/ priority:3
+          EOF
 
           cat /etc/apt/apt-mirrors.txt
 
