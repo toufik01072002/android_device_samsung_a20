@@ -212,7 +212,8 @@ jobs:
             --without-lzma \
             --without-zstd
 
-          make -j2
+          echo "===== BUILD WITH ARM64 PURGATORY COMPILER ====="
+          make TARGET_CC="$TC/bin/clang --target=aarch64-linux-android24" -j2
 
           echo "===== SEARCH KEXEC ====="
           find . -type f -name kexec -print
