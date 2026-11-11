@@ -204,12 +204,12 @@ jobs:
           export CFLAGS="--target=aarch64-linux-android24 -O2 -fPIE"
           export LDFLAGS="-pie"
 
-          ./configure \\
-            --build="$(gcc -dumpmachine)" \\
-            --host=aarch64-linux-android \\
-            --without-xen \\
-            --without-zlib \\
-            --without-lzma \\
+          ./configure \
+            --build="$(gcc -dumpmachine)" \
+            --host=aarch64-linux-android \
+            --without-xen \
+            --without-zlib \
+            --without-lzma \
             --without-zstd
 
           make -j2
