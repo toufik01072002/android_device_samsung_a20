@@ -24,11 +24,31 @@ jobs:
 
       - name: Install EDK2 dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential uuid-dev acpica-tools git nasm \
-            python3 python3-setuptools gcc-aarch64-linux-gnu mkbootimg \
-            device-tree-compiler
-          sudo sed -i '/^from gki\.generate_gki_certificate import generate_gki_certificate$/d' /usr/bin/mkbootimg
+          set -euo pipefail
+
+          for attempt in 1 2 3 4 5; do
+            echo "===== APT attempt $attempt/5 ====="
+
+            if sudo apt-get update &&
+               sudo apt-get install -y \
+                 build-essential uuid-dev acpica-tools git nasm \
+                 python3 python3-setuptools gcc-aarch64-linux-gnu mkbootimg \
+                 device-tree-compiler; then
+
+              sudo sed -i \
+                '/^from gki\.generate_gki_certificate import generate_gki_certificate$/d' \
+                /usr/bin/mkbootimg
+
+              echo "EDK2 dependencies installed successfully"
+              exit 0
+            fi
+
+            echo "APT failed; waiting 20 seconds before retry"
+            sleep 20
+          done
+
+          echo "ERROR: EDK2 dependency installation failed after 5 attempts"
+          exit 1
 
       - name: Clone EDK2 and edk2-platforms
         run: |
