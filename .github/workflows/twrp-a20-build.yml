@@ -164,13 +164,21 @@ jobs:
             https://github.com/toufik01072002/android_device_samsung_a20.git \
             device/samsung/a20
 
-      - name: Install Android NDK
+      - name: Install Android SDK in runner home
+        run: |
+          mkdir -p "$HOME/android-sdk"
+          echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> "$GITHUB_ENV"
+
+      - name: Install Android command-line tools
         uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - name: Install NDK toolchain
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "ndk;27.2.12479018"
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null
+          sdkmanager --sdk_root="$ANDROID_HOME" "ndk;27.2.12479018"
 
       - name: Build kexec-tools for Android ARM64
         run: |
