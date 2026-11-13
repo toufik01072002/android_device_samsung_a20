@@ -11,7 +11,7 @@ on:
       edk2_ref:
         description: "Branche ou tag EDK2 à compiler"
         required: false
-        default: "fix-sec-entry-address-8280"
+        default: "integrate/fd-sec-contract"
         type: string
   pull_request:
     branches:
@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: toufik01072002/edk2-exynos7885
-          ref: ${{ inputs.edk2_ref || 'fix-sec-entry-address-8280' }}
+          ref: ${{ inputs.edk2_ref || 'integrate/fd-sec-contract' }}
           path: edk2-exynos7885
           submodules: recursive
 
@@ -120,57 +120,33 @@ jobs:
           ./firstrun.sh
           ./build.sh
 
-      - name: Verify EDK2 boot.img
-        working-directory: edk2-exynos7885
+      - name: Validate 7K-EDK2-BUNDLE and SEC metadata
+        working-directory: edk2-exynos7885/workspace
         run: |
-          ls -la workspace/
-          file workspace/boot.img
-          # Verify Android boot magic
-          dd if=workspace/boot.img bs=8 count=1 2>/dev/null | grep -q "ANDROID!" && echo "Boot magic OK" || (echo "Invalid boot image" && exit 1)
-          # Read page_size from header (offset 0x24, 4 bytes LE)
-          PAGE_SIZE=$(dd if=workspace/boot.img bs=1 skip=36 count=4 2>/dev/null | od -An -tx4 | tr -d ' \n')
-          PAGE_SIZE=$((16#$PAGE_SIZE))
-          echo "Page size: $PAGE_SIZE"
-          if [ $PAGE_SIZE -ne 2048 ] && [ $PAGE_SIZE -ne 4096 ]; then
-            echo "Unexpected page size: $PAGE_SIZE"
-            exit 1
-          fi
-          # Extract kernel size (offset 0x08, 4 bytes LE) - Android boot header v0
-          KERNEL_SIZE=$(dd if=workspace/boot.img bs=1 skip=8 count=4 2>/dev/null | od -An -tx4 | tr -d ' \n')
-          KERNEL_SIZE=$((16#$KERNEL_SIZE))
-          echo "Kernel size: $KERNEL_SIZE bytes"
-          if [ $KERNEL_SIZE -lt 1048576 ] || [ $KERNEL_SIZE -gt 16777216 ]; then
-            echo "Kernel size out of range"
-            exit 1
-          fi
-          # Check for BootShim magic at offset 0x38 from kernel start (4 bytes: 41 52 4d 64 = "ARMd" = 0x644D5241 LE)
-          KERNEL_START=$PAGE_SIZE
-          BOOTSHIM_OFFSET=$((KERNEL_START + 0x38))
-          dd if=workspace/boot.img bs=1 skip=$BOOTSHIM_OFFSET count=4 2>/dev/null | od -An -tx1 | grep -q "41 52 4d 64" && echo "BootShim magic found at offset 0x38" || (echo "BootShim magic not found at offset 0x38" && exit 1)
-          # Search for _FVH signature in the kernel region (after kernel header)
-          # Search from kernel start + 0x38 to kernel start + kernel_size
-          dd if=workspace/boot.img bs=1 skip=$((KERNEL_START + 0x38)) count=$((KERNEL_SIZE - 0x38)) 2>/dev/null | grep -q "_FVH" && echo "UEFI FD signature (_FVH) found" || (echo "UEFI FD signature not found" && exit 1)
+          set -euo pipefail
+          ls -lh
+          python3 ../tools/verify_bundle.py
+          python3 ../BootShim/validate_prepi_entry.py
+          test -s UEFI
+          test -s UEFI.manifest.json
+          test -s UEFI.sec-manifest.json
+          sha256sum UEFI UEFI.manifest.json UEFI.sec-manifest.json > SHA256SUMS
+          sha256sum -c SHA256SUMS
 
-      - name: Prepare artifact staging
+      - name: Prepare EDK2 bundle artifact
         working-directory: edk2-exynos7885
         run: |
+          set -euo pipefail
           mkdir -p artifact-staging
-          cp workspace/UEFI artifact-staging/
-          cp workspace/boot.img artifact-staging/
-          cp workspace/boot.tar artifact-staging/
-          ls -la artifact-staging/
+          cp workspace/UEFI workspace/UEFI.manifest.json \
+            workspace/UEFI.sec-manifest.json workspace/SHA256SUMS artifact-staging/
+          (cd artifact-staging && sha256sum -c SHA256SUMS)
+          ls -lh artifact-staging/
 
-      - name: Generate SHA256SUMS
-        working-directory: edk2-exynos7885
-        run: |
-          cd artifact-staging
-          sha256sum UEFI boot.img boot.tar > SHA256SUMS
-          cat SHA256SUMS
-
-      - name: Upload EDK2 artifacts
+      - name: Upload EDK2 bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: edk2-artifacts
+          name: a205w-edk2
           path: |
             edk2-exynos7885/artifact-staging/
           retention-days: 7
@@ -243,7 +219,7 @@ jobs:
         if: ${{ inputs.reuse_edk2_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
-          name: edk2-artifacts
+          name: a205w-edk2
           path: edk2-artifacts
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
@@ -253,7 +229,7 @@ jobs:
         if: ${{ inputs.reuse_edk2_run_id == '' }}
         uses: actions/download-artifact@v4
         with:
-          name: edk2-artifacts
+          name: a205w-edk2
           path: edk2-artifacts
 
       - name: Clone Samsung A20 device tree
@@ -490,33 +466,24 @@ jobs:
           file "$DEST/kexec"
           sha256sum "$DEST/kexec"
 
-      - name: Verify EDK2 artifacts exist
+      - name: Verify EDK2 bundle artifact
         run: |
-          ls -la edk2-artifacts/
-          test -f edk2-artifacts/boot.img || (echo "boot.img not found in artifacts" && exit 1)
-          test -f edk2-artifacts/SHA256SUMS || (echo "SHA256SUMS not found" && exit 1)
+          set -euo pipefail
+          ls -lh edk2-artifacts/
+          for file in UEFI UEFI.manifest.json UEFI.sec-manifest.json SHA256SUMS; do
+            test -s "edk2-artifacts/$file"
+          done
+          (cd edk2-artifacts && sha256sum -c SHA256SUMS)
 
-      - name: Verify EDK2 artifacts checksums
+      - name: Install 7K-EDK2-BUNDLE in device tree
         run: |
-          cd edk2-artifacts
-          sha256sum -c SHA256SUMS && echo "All checksums verified" || (echo "Checksum verification failed" && exit 1)
-
-      - name: Copy EDK2 boot.img to device tree prebuilt
-        run: |
-          mkdir -p ~/twrp/device/samsung/a20/prebuilt/etc/edk2
-          cp edk2-artifacts/boot.img ~/twrp/device/samsung/a20/prebuilt/etc/edk2/boot.img
-          # Verify copy integrity: compare SHA256 of original and copy
-          ORIGINAL_SHA256=$(sha256sum edk2-artifacts/boot.img | cut -d' ' -f1)
-          COPY_SHA256=$(sha256sum ~/twrp/device/samsung/a20/prebuilt/etc/edk2/boot.img | cut -d' ' -f1)
-          if [ "$ORIGINAL_SHA256" = "$COPY_SHA256" ]; then
-            echo "Copy verified: SHA256 matches"
-          else
-            echo "Copy verification failed: SHA256 mismatch"
-            echo "Original: $ORIGINAL_SHA256"
-            echo "Copy:     $COPY_SHA256"
-            exit 1
-          fi
-          ls -la ~/twrp/device/samsung/a20/prebuilt/etc/edk2/
+          set -euo pipefail
+          DEST=~/twrp/device/samsung/a20/prebuilt/etc/edk2
+          mkdir -p "$DEST"
+          cp edk2-artifacts/UEFI edk2-artifacts/UEFI.manifest.json \
+            edk2-artifacts/UEFI.sec-manifest.json edk2-artifacts/SHA256SUMS "$DEST/"
+          (cd "$DEST" && sha256sum -c SHA256SUMS)
+          ls -lh "$DEST/"
 
       - name: Use custom TWRP recovery source
         run: |
@@ -579,13 +546,17 @@ jobs:
           cpio -idm --no-absolute-filenames < ../ramdisk.cpio
 
           echo "===== EDK2 FILES ====="
-          find . -type f | grep -E 'boot.img|edk2_verify.sh' || true
+          find . -type f | grep -E 'UEFI|edk2_verify.sh' || true
 
-          test -s system/etc/edk2/boot.img
+          test -s system/etc/edk2/UEFI
+          test -s system/etc/edk2/UEFI.manifest.json
+          test -s system/etc/edk2/UEFI.sec-manifest.json
+          test -s system/etc/edk2/SHA256SUMS
           test -s system/bin/edk2_verify.sh
+          (cd system/etc/edk2 && sha256sum -c SHA256SUMS)
 
           echo "SUCCESS: EDK2 files verified in recovery ramdisk"
-          file system/etc/edk2/boot.img
+          file system/etc/edk2/UEFI
 
       - name: Generate recovery SHA256
         run: |
