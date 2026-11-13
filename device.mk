@@ -9,11 +9,14 @@ PRODUCT_PACKAGES += \
 PRODUCT_PRODUCT_PROPERTIES += \
 	ro.fastbootd.available=true
 
-# EDK2/UEFI boot image - copy to recovery ramdisk for validation
+# 7K-EDK2-BUNDLE and its manifests (read-only validation from recovery)
 PRODUCT_COPY_FILES += \
-	$(LOCAL_PATH)/prebuilt/etc/edk2/boot.img:recovery/root/system/etc/edk2/boot.img
+	$(LOCAL_PATH)/prebuilt/etc/edk2/UEFI:recovery/root/system/etc/edk2/UEFI \
+	$(LOCAL_PATH)/prebuilt/etc/edk2/UEFI.manifest.json:recovery/root/system/etc/edk2/UEFI.manifest.json \
+	$(LOCAL_PATH)/prebuilt/etc/edk2/UEFI.sec-manifest.json:recovery/root/system/etc/edk2/UEFI.sec-manifest.json \
+	$(LOCAL_PATH)/prebuilt/etc/edk2/SHA256SUMS:recovery/root/system/etc/edk2/SHA256SUMS
 
-# EDK2 verification script
+# EDK2 bundle verification script
 PRODUCT_COPY_FILES += \
 	$(LOCAL_PATH)/prebuilt/edk2_verify.sh:recovery/root/system/bin/edk2_verify.sh
 
@@ -21,7 +24,6 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/kexec/exynos7885.dtb:recovery/root/system/etc/kexec/exynos7885.dtb \
     $(LOCAL_PATH)/prebuilt/kexec/kexec:recovery/root/system/bin/kexec
-
 
 # Zinitix A20 touchscreen firmware
 PRODUCT_COPY_FILES += \
