@@ -8,6 +8,11 @@ on:
         required: false
         default: "43064150201"
         type: string
+  pull_request:
+    branches:
+      - android-11
+    paths:
+      - ".github/workflows/twrp-a20-build.yml"
   push:
     branches:
       - android-11
@@ -303,6 +308,132 @@ jobs:
           echo "===== ZINITIX FIRMWARE ====="
           ls -lh "$DEST"
           sha256sum "$DEST"
+
+      - name: Build A20 KEXEC kernel and validate DTB
+        run: |
+          set -euo pipefail
+
+          KERNEL_DIR="$HOME/kernel-firmware-src"
+          DEVICE_DIR="$HOME/twrp/device/samsung/a20"
+          OUT="$RUNNER_TEMP/a20-kexec-out"
+          STAGE="$RUNNER_TEMP/a20-kexec-artifacts"
+          TOOLCHAIN="$KERNEL_DIR/toolchain"
+
+          test -d "$KERNEL_DIR"
+          test -s "$KERNEL_DIR/arch/arm64/configs/exynos7885-a20_defconfig"
+          test -s "$KERNEL_DIR/init/uh.elf"
+          test -s "$KERNEL_DIR/firmware/exynos7885_acpm_fvp.fw"
+          test -s "$DEVICE_DIR/prebuilt/kexec/Image"
+          test -s "$DEVICE_DIR/prebuilt/kexec/exynos7885.dtb"
+
+          mkdir -p "$TOOLCHAIN" "$OUT/init" "$OUT/firmware" "$STAGE"
+
+          echo "===== Install Android GCC 4.9 ====="
+          wget -q \
+            "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/423c0265176bcabd1c885f8cf6f0cedf67d3f59b.tar.gz" \
+            -O "$RUNNER_TEMP/gcc49.tar.gz"
+          tar -xzf "$RUNNER_TEMP/gcc49.tar.gz" -C "$TOOLCHAIN"
+          test -x "$TOOLCHAIN/bin/aarch64-linux-android-gcc"
+          export PATH="$TOOLCHAIN/bin:$PATH"
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-android-
+          export ANDROID_MAJOR_VERSION=p
+
+          aarch64-linux-android-gcc --version
+
+          echo "===== Configure KEXEC kernel ====="
+          make -C "$KERNEL_DIR" O="$OUT" \
+            ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" \
+            exynos7885-a20_defconfig
+          make -C "$KERNEL_DIR" O="$OUT" \
+            ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" \
+            olddefconfig
+          grep -qx 'CONFIG_KEXEC=y' "$OUT/.config"
+
+          echo "===== Prepare out-of-tree embedded binaries ====="
+          cp "$KERNEL_DIR/init/uh.elf" "$OUT/init/uh.elf"
+          cp "$KERNEL_DIR/firmware/exynos7885_acpm_fvp.fw" \
+            "$OUT/firmware/exynos7885_acpm_fvp.fw"
+
+          echo "===== Compile ARM64 Image and DTBs ====="
+          make -C "$KERNEL_DIR" -j2 O="$OUT" \
+            HOSTCFLAGS=-fcommon ARCH=arm64 \
+            CROSS_COMPILE="$CROSS_COMPILE" Image dtbs
+
+          IMAGE="$OUT/arch/arm64/boot/Image"
+          test -s "$IMAGE"
+          test -s "$OUT/vmlinux"
+          test -s "$OUT/System.map"
+
+          DTB_COUNT=$(find "$OUT/arch/arm64/boot/dts" -type f \
+            -name 'exynos7885.dtb' | wc -l)
+          if [ "$DTB_COUNT" -ne 1 ]; then
+            echo "Expected exactly one exynos7885.dtb, found: $DTB_COUNT"
+            find "$OUT/arch/arm64/boot/dts" -type f -name '*.dtb' -print
+            exit 1
+          fi
+          DTB=$(find "$OUT/arch/arm64/boot/dts" -type f \
+            -name 'exynos7885.dtb' -print -quit)
+          test -s "$DTB"
+
+          cp "$IMAGE" "$STAGE/Image.kexec"
+          cp "$DTB" "$STAGE/exynos7885.dtb"
+          cp "$OUT/.config" "$STAGE/kernel.config"
+          cp "$OUT/vmlinux" "$STAGE/vmlinux"
+          cp "$OUT/System.map" "$STAGE/System.map"
+          cp "$DEVICE_DIR/prebuilt/kexec/Image" "$STAGE/Image.prebuilt"
+          cp "$DEVICE_DIR/prebuilt/kexec/exynos7885.dtb" \
+            "$STAGE/exynos7885.prebuilt.dtb"
+
+          echo "===== DTB compatibility gate ====="
+          BUILT_DTB_SHA=$(sha256sum "$DTB" | cut -d' ' -f1)
+          PREBUILT_DTB_SHA=$(sha256sum \
+            "$DEVICE_DIR/prebuilt/kexec/exynos7885.dtb" | cut -d' ' -f1)
+          echo "BUILT_DTB_SHA=$BUILT_DTB_SHA"
+          echo "PREBUILT_DTB_SHA=$PREBUILT_DTB_SHA"
+          {
+            echo "Kernel repository: toufik01072002/Kernel_SM-A205W"
+            echo "Kernel branch: kexec-arm64-4.4-d-work"
+            echo "Kernel commit: $(git -C "$KERNEL_DIR" rev-parse HEAD)"
+            echo "Toolchain: Android GCC 4.9"
+            echo "ANDROID_MAJOR_VERSION=$ANDROID_MAJOR_VERSION"
+            echo "Built DTB: $DTB"
+            echo "Built DTB SHA256: $BUILT_DTB_SHA"
+            echo "Prebuilt DTB SHA256: $PREBUILT_DTB_SHA"
+          } > "$STAGE/build-info.txt"
+
+          if [ "$BUILT_DTB_SHA" != "$PREBUILT_DTB_SHA" ]; then
+            echo "::error::Compiled DTB differs from the TWRP prebuilt DTB."
+            echo "Stopping before replacing the recovery kernel."
+            exit 1
+          fi
+
+          echo "===== DTB matches; stage new kernel for this runner only ====="
+          ORIGINAL_IMAGE_SHA=$(sha256sum \
+            "$DEVICE_DIR/prebuilt/kexec/Image" | cut -d' ' -f1)
+          BUILT_IMAGE_SHA=$(sha256sum "$IMAGE" | cut -d' ' -f1)
+          cp "$IMAGE" "$DEVICE_DIR/prebuilt/kexec/Image"
+          test "$(sha256sum "$DEVICE_DIR/prebuilt/kexec/Image" | cut -d' ' -f1)" \
+            = "$BUILT_IMAGE_SHA"
+          {
+            echo "Original TWRP kernel SHA256: $ORIGINAL_IMAGE_SHA"
+            echo "Injected KEXEC kernel SHA256: $BUILT_IMAGE_SHA"
+          } >> "$STAGE/build-info.txt"
+          sha256sum "$STAGE"/Image.kexec "$STAGE"/exynos7885.dtb \
+            "$STAGE"/Image.prebuilt "$STAGE"/exynos7885.prebuilt.dtb \
+            > "$STAGE/SHA256SUMS"
+
+          echo "KEXEC kernel built and DTB gate passed."
+          cat "$STAGE/build-info.txt"
+
+      - name: Upload KEXEC kernel validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: A20-KEXEC-kernel-validation
+          path: ${{ runner.temp }}/a20-kexec-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Build kexec-tools for Android ARM64
         run: |
