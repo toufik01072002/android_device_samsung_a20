@@ -493,6 +493,22 @@ jobs:
             https://github.com/toufik01072002/android_bootable_recovery.git \
             bootable/recovery
 
+      - name: Point TWRP EDK2 validation to the UEFI bundle
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path.home() / "twrp/bootable/recovery/gui/action.cpp"
+          s = p.read_text()
+          old = 'const char* edk2_image_path = "/system/etc/edk2/boot.img";'
+          new = 'const char* edk2_image_path = "/system/etc/edk2/UEFI";'
+          if old not in s:
+              raise SystemExit("Expected legacy EDK2 path not found in GUI source")
+          p.write_text(s.replace(old, new, 1))
+          print("TWRP GUI now validates /system/etc/edk2/UEFI")
+          PY
+          grep -n 'edk2_image_path' ~/twrp/bootable/recovery/gui/action.cpp
+
       - name: Restore JDK 11 for TWRP
         uses: actions/setup-java@v4
         with:
