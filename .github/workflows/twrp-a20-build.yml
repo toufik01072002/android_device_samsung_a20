@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       reuse_edk2_run_id:
-        description: "Run ID contenant l'artefact EDK2 à réutiliser"
+        description: "Run ID contenant l'artefact EDK2 à réutiliser (vide = reconstruire)"
         required: false
-        default: "43064150201"
+        default: ""
+        type: string
+      edk2_ref:
+        description: "Branche ou tag EDK2 à compiler"
+        required: false
+        default: "fix-sec-entry-address-8280"
         type: string
   pull_request:
     branches:
@@ -32,6 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: toufik01072002/edk2-exynos7885
+          ref: ${{ inputs.edk2_ref || 'fix-sec-entry-address-8280' }}
           path: edk2-exynos7885
           submodules: recursive
 
