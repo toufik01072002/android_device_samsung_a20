@@ -151,9 +151,16 @@ jobs:
             edk2-exynos7885/artifact-staging/
           retention-days: 7
 
-  build-twrp:
+  build-virtual-boot:
     needs: build-edk2
     if: ${{ always() && (needs.build-edk2.result == 'success' || needs.build-edk2.result == 'skipped') }}
+    uses: toufik01072002/edk2-exynos7885/.github/workflows/build-virtual-boot.yml@integrate/fd-sec-contract
+    with:
+      edk2_artifact_available: ${{ inputs.reuse_edk2_run_id == '' }}
+
+  build-twrp:
+    needs: [build-edk2, build-virtual-boot]
+    if: ${{ always() && (needs.build-edk2.result == 'success' || needs.build-edk2.result == 'skipped') && needs.build-virtual-boot.result == 'success' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
@@ -232,6 +239,12 @@ jobs:
           name: a205w-edk2
           path: edk2-artifacts
 
+      - name: Download Virtual Boot runtime bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: virtual-boot-bundle
+          path: virtual-boot-artifacts
+
       - name: Clone Samsung A20 device tree
         run: |
           cd ~/twrp
@@ -255,8 +268,9 @@ jobs:
             echo "::error::Virtual Boot staging must not execute the loaded kernel or reboot."
             exit 1
           fi
-          grep -Fq 'KEXEC_KERNEL="/system/etc/kexec/Image"' prebuilt/edk2_verify.sh
-          grep -Fq 'KEXEC_DTB="/system/etc/kexec/exynos7885.dtb"' prebuilt/edk2_verify.sh
+          grep -Fq 'VIRTUAL_BOOT_DIR="/system/etc/virtual-boot"' prebuilt/edk2_verify.sh
+          grep -Fq 'VB_INITRAMFS="$VIRTUAL_BOOT_DIR/initramfs.cpio.gz"' prebuilt/edk2_verify.sh
+          grep -Fq 'VB_MANIFEST="$VIRTUAL_BOOT_DIR/hardware-manifest.json"' prebuilt/edk2_verify.sh
           grep -Fq 'VIRTUAL_BOOT_PREFLIGHT=PASS' prebuilt/edk2_verify.sh
           grep -Fq 'rm -f /tmp/edk2_verify_result' prebuilt/edk2_verify.sh
           if grep -Fq '"$KEXEC" -l' prebuilt/edk2_verify.sh || grep -Fq '"$KEXEC" -e' prebuilt/edk2_verify.sh; then
@@ -446,6 +460,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Install Virtual Boot runtime bundle in device tree
+        run: |
+          set -euo pipefail
+          DEST="$HOME/twrp/device/samsung/a20/prebuilt/etc/virtual-boot"
+          mkdir -p "$DEST"
+          for file in Image exynos7885-a205w-virtual.dtb initramfs.cpio.gz hardware-manifest.json handoff-producer-report.json SHA256SUMS; do
+            test -s "virtual-boot-artifacts/$file"
+            install -m 0644 "virtual-boot-artifacts/$file" "$DEST/$file"
+          done
+          (cd "$DEST" && sha256sum -c SHA256SUMS)
+          echo "Virtual Boot runtime bundle installed and verified:"
+          ls -lh "$DEST/"
+
       - name: Build kexec-tools for Android ARM64
         run: |
           set -euo pipefail
@@ -610,7 +637,13 @@ jobs:
           sh -n system/bin/virtual_boot_prepare.sh
           (cd system/etc/edk2 && sha256sum -c SHA256SUMS)
 
-          echo "SUCCESS: EDK2 files verified in recovery ramdisk"
+          echo "===== Verify Virtual Boot runtime bundle in recovery ramdisk ====="
+          for file in Image exynos7885-a205w-virtual.dtb initramfs.cpio.gz hardware-manifest.json handoff-producer-report.json SHA256SUMS; do
+            test -s "system/etc/virtual-boot/$file"
+          done
+          (cd system/etc/virtual-boot && sha256sum -c SHA256SUMS)
+
+          echo "SUCCESS: EDK2 and Virtual Boot files verified in recovery ramdisk"
           file system/etc/edk2/UEFI
 
       - name: Generate recovery SHA256
