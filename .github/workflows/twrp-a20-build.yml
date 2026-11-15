@@ -68,34 +68,43 @@ jobs:
           done
 
       - name: Install EDK2 dependencies
+        timeout-minutes: 45
         run: |
           set -euo pipefail
 
-          echo "===== Configure verified Ubuntu mirrors ====="
+          echo "===== Configure reachable Ubuntu mirror ====="
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          p = Path("/etc/apt/sources.list.d/ubuntu.sources")
+          if p.exists():
+              s = p.read_text()
+              for old in (
+                  "http://archive.ubuntu.com/ubuntu/",
+                  "http://azure.archive.ubuntu.com/ubuntu/",
+                  "http://security.ubuntu.com/ubuntu/",
+              ):
+                  s = s.replace(old, "https://mirrors.edge.kernel.org/ubuntu/")
+              p.write_text(s)
+              print(p.read_text())
+          else:
+              print("No ubuntu.sources file; retaining runner APT sources")
+          PY
 
-          printf '%s\tpriority:%s\n' \
-            'https://mirrors.edge.kernel.org/ubuntu/' 1 \
-            'https://mirror.math.princeton.edu/pub/ubuntu/' 2 \
-            'https://ubuntu.mirror.constant.com/ubuntu/' 3 \
-            | sudo tee /etc/apt/apt-mirrors.txt
-
-          cat /etc/apt/apt-mirrors.txt
-
-          echo "===== APT update ====="
+          echo "===== Bounded APT update ====="
           date -u
-          sudo apt-get \
+          timeout 18m sudo apt-get \
             -o APT::Update::Error-Mode=any \
-            -o Acquire::Retries=1 \
-            -o Acquire::http::Timeout=20 \
-            -o Acquire::https::Timeout=20 \
+            -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=15 \
+            -o Acquire::https::Timeout=15 \
             update
 
-          echo "===== Install EDK2 dependencies ====="
-          sudo apt-get \
-            -o Acquire::Retries=1 \
-            -o Acquire::http::Timeout=20 \
-            -o Acquire::https::Timeout=20 \
-            install -y \
+          echo "===== Bounded EDK2 dependency install ====="
+          DEBIAN_FRONTEND=noninteractive timeout 22m sudo apt-get \
+            -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=15 \
+            -o Acquire::https::Timeout=15 \
+            install -y --no-install-recommends \
               build-essential uuid-dev acpica-tools git nasm \
               python3 python3-setuptools gcc-aarch64-linux-gnu mkbootimg \
               device-tree-compiler
@@ -249,6 +258,8 @@ jobs:
           RELEASE_JSON="$RUNNER_TEMP/virtual-boot-release.json"
           ZIP="$RUNNER_TEMP/virtual-boot-bundle.zip"
 
+          # Release assets are public downloads; unlike Actions artifacts they do not require
+          # a cross-repository Actions token.
           ASSET_URL=""
           for attempt in $(seq 1 60); do
             if curl -fsSL "$API" -o "$RELEASE_JSON"; then
@@ -272,6 +283,8 @@ jobs:
             cp "$SRC/$file" "$DEST/$file"
           done
 
+          # The full bundle checksum list also covers EDK2 and patch files not
+          # needed by this first-stage TWRP kernel loader. Generate a scoped list.
           (
             cd "$DEST"
             sha256sum Image exynos7885-a205w-virtual.dtb initramfs.cpio.gz > SHA256SUMS
@@ -544,13 +557,15 @@ jobs:
           s = p.read_text()
           old = 'const char* edk2_image_path = "/system/etc/edk2/boot.img";'
           new = 'const char* edk2_image_path = "/system/etc/edk2/UEFI";'
-          if old not in s:
-              raise SystemExit("Expected legacy EDK2 path not found in GUI source")
-          p.write_text(s.replace(old, new, 1))
-          print("TWRP GUI now validates /system/etc/edk2/UEFI")
+          if new in s:
+              print("TWRP GUI already validates /system/etc/edk2/UEFI")
+          elif old in s:
+              p.write_text(s.replace(old, new, 1))
+              print("TWRP GUI now validates /system/etc/edk2/UEFI")
+          else:
+              raise SystemExit("Neither legacy nor UEFI EDK2 path found in GUI source")
           PY
           grep -n 'edk2_image_path' ~/twrp/bootable/recovery/gui/action.cpp
-
 
       - name: Restore JDK 11 for TWRP
         uses: actions/setup-java@v4
@@ -614,6 +629,29 @@ jobs:
           test -s system/bin/edk2_verify.sh
           (cd system/etc/edk2 && sha256sum -c SHA256SUMS)
 
+          echo "===== VIRTUAL BOOT RUNTIME FILES ====="
+          for file in \
+            system/etc/virtual-boot/Image \
+            system/etc/virtual-boot/exynos7885-a205w-virtual.dtb \
+            system/etc/virtual-boot/initramfs.cpio.gz \
+            system/etc/virtual-boot/hardware-manifest.json \
+            system/etc/virtual-boot/SHA256SUMS; do
+            test -s "$file"
+          done
+          (cd system/etc/virtual-boot && sha256sum -c SHA256SUMS)
+
+          echo "===== KEXEC STAGING ENTRY POINT ====="
+          test -x system/bin/kexec
+          test -x system/bin/virtual_boot_prepare.sh
+          readelf -h system/bin/kexec | grep -q "AArch64"
+          grep -Fq '"$KEXEC" -l "$IMAGE"' system/bin/virtual_boot_prepare.sh
+          if grep -Fq '"$KEXEC" -e' system/bin/virtual_boot_prepare.sh || \\
+             grep -Eq '^[[:space:]]*reboot([[:space:]]|$)' system/bin/virtual_boot_prepare.sh; then
+            echo "ERROR: staging script contains a forbidden execution or reboot command"
+            exit 1
+          fi
+
+          echo "SUCCESS: EDK2 + Virtual Boot payloads, checksums, ARM64 kexec and load-only launcher verified"
           echo "SUCCESS: EDK2 files verified in recovery ramdisk"
           file system/etc/edk2/UEFI
 
