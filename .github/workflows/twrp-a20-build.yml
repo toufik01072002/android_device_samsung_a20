@@ -269,9 +269,11 @@ jobs:
           sh -n prebuilt/edk2_verify.sh
           test -s prebuilt/virtual_boot_prepare.sh
           sh -n prebuilt/virtual_boot_prepare.sh
-          grep -Fq '"$KEXEC" -l "$IMAGE"' prebuilt/virtual_boot_prepare.sh
-          if grep -Fq '"$KEXEC" -e' prebuilt/virtual_boot_prepare.sh || grep -Eq '(^|[[:space:]])reboot([[:space:]]|$)' prebuilt/virtual_boot_prepare.sh; then
-            echo "::error::Virtual Boot staging must not execute the loaded kernel or reboot."
+          grep -Fq 'VIRTUAL_BOOT_READY=1' prebuilt/virtual_boot_prepare.sh
+          grep -Fq 'VIRTUAL_BOOT_KEXEC_LOAD=BLOCKED' prebuilt/virtual_boot_prepare.sh
+          grep -Fq 'VIRTUAL_BOOT_HANDOFF=DISABLED' prebuilt/virtual_boot_prepare.sh
+          if grep -Fq '"$KEXEC" -l' prebuilt/virtual_boot_prepare.sh || grep -Fq '"$KEXEC" -e' prebuilt/virtual_boot_prepare.sh || grep -Eq '(^|[[:space:]])reboot([[:space:]]|$)' prebuilt/virtual_boot_prepare.sh; then
+            echo "::error::Virtual Boot preparation must not load or execute KEXEC."
             exit 1
           fi
           grep -Fq 'VIRTUAL_BOOT_DIR="/system/etc/virtual-boot"' prebuilt/edk2_verify.sh
@@ -563,6 +565,7 @@ jobs:
           grep -Fq 'tw_virtual_boot_kernel_sha256' bootable/recovery/gui/action.cpp
           grep -Fq 'tw_virtual_boot_dtb_sha256' bootable/recovery/gui/action.cpp
           grep -Fq 'Fresh verification result file not found' bootable/recovery/gui/action.cpp
+          grep -Fq 'Virtual Boot bundle validated. KEXEC loading and handoff remain disabled.' bootable/recovery/gui/action.cpp
 
       - name: Point TWRP EDK2 validation to the UEFI bundle
         run: |
