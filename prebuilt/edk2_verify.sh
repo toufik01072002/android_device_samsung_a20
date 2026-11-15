@@ -65,5 +65,8 @@ BUNDLE_SHA256=$(sha256sum UEFI | cut -d' ' -f1)
 # Compatibility keys consumed by the existing TWRP GUI action.
 echo "KERNEL_SIZE=$FILESIZE" > /tmp/edk2_verify_result
 echo "KERNEL_SHA256=$BUNDLE_SHA256" >> /tmp/edk2_verify_result
-info "7K-EDK2-BUNDLE validation PASSED"
+echo "VIRTUAL_BOOT_PREFLIGHT=PASS" >> /tmp/edk2_verify_result
+echo "VIRTUAL_BOOT_KERNEL_SHA256=$KEXEC_KERNEL_SHA256" >> /tmp/edk2_verify_result
+echo "VIRTUAL_BOOT_DTB_SHA256=$KEXEC_DTB_SHA256" >> /tmp/edk2_verify_result
+info "EDK2 bundle and Virtual Boot preflight validation PASSED"
 exit 0
