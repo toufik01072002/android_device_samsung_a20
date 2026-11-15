@@ -259,6 +259,9 @@ jobs:
           test -s prebuilt/Image
           test -s prebuilt/kexec/Image
           grep -Fqx '    $(LOCAL_PATH)/prebuilt/kexec/Image:recovery/root/system/etc/kexec/Image \\' device.mk
+          grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/Image:recovery/root/system/etc/virtual-boot/Image' device.mk
+          grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/initramfs.cpio.gz:recovery/root/system/etc/virtual-boot/initramfs.cpio.gz' device.mk
+          grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/SHA256SUMS:recovery/root/system/etc/virtual-boot/SHA256SUMS' device.mk
           test -s prebuilt/edk2_verify.sh
           sh -n prebuilt/edk2_verify.sh
           test -s prebuilt/virtual_boot_prepare.sh
@@ -271,6 +274,8 @@ jobs:
           grep -Fq 'VIRTUAL_BOOT_DIR="/system/etc/virtual-boot"' prebuilt/edk2_verify.sh
           grep -Fq 'VB_INITRAMFS="$VIRTUAL_BOOT_DIR/initramfs.cpio.gz"' prebuilt/edk2_verify.sh
           grep -Fq 'VB_MANIFEST="$VIRTUAL_BOOT_DIR/hardware-manifest.json"' prebuilt/edk2_verify.sh
+          grep -Fq 'VB_PROVENANCE="$VIRTUAL_BOOT_DIR/handoff-producer-report.json"' prebuilt/edk2_verify.sh
+          grep -Fq 'sha256sum -c SHA256SUMS' prebuilt/edk2_verify.sh
           grep -Fq 'VIRTUAL_BOOT_PREFLIGHT=PASS' prebuilt/edk2_verify.sh
           grep -Fq 'rm -f /tmp/edk2_verify_result' prebuilt/edk2_verify.sh
           if grep -Fq '"$KEXEC" -l' prebuilt/edk2_verify.sh || grep -Fq '"$KEXEC" -e' prebuilt/edk2_verify.sh; then
