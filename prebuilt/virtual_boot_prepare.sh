@@ -11,10 +11,12 @@ KEXEC=/system/bin/kexec
 IMAGE="$ROOT/Image"
 DTB="$ROOT/exynos7885-a205w-virtual.dtb"
 INITRD="$ROOT/initramfs.cpio.gz"
+MANIFEST="$ROOT/hardware-manifest.json"
+PROVENANCE="$ROOT/handoff-producer-report.json"
 
 echo "[Virtual Boot] Starting read-only bundle validation"
 
-for file in "$IMAGE" "$DTB" "$INITRD" "$ROOT/hardware-manifest.json" "$ROOT/SHA256SUMS"; do
+for file in "$IMAGE" "$DTB" "$INITRD" "$MANIFEST" "$PROVENANCE" "$ROOT/SHA256SUMS"; do
     if [ ! -s "$file" ]; then
         echo "ERROR: required file missing or empty: $file"
         exit 1
@@ -26,8 +28,21 @@ if [ ! -x "$KEXEC" ]; then
     exit 1
 fi
 
-grep -q 'Samsung SM-A205W / Exynos 7885' "$ROOT/hardware-manifest.json" || {
+grep -q 'Samsung SM-A205W / Exynos 7885' "$MANIFEST" || {
     echo "ERROR: hardware manifest does not target SM-A205W / Exynos 7885"
+    exit 1
+}
+
+grep -Eq '"architecture"[[:space:]]*:[[:space:]]*"AARCH64"' "$MANIFEST" || {
+    echo "ERROR: Virtual Boot manifest architecture is not AARCH64"
+    exit 1
+}
+grep -Eq '"state"[[:space:]]*:[[:space:]]*"DISABLED"' "$MANIFEST" || {
+    echo "ERROR: handoff state must remain DISABLED"
+    exit 1
+}
+grep -Fq 'CONFIGURATION_CANDIDATES_ONLY_NOT_RUNTIME_RESERVATIONS' "$MANIFEST" || {
+    echo "ERROR: physical addresses are not marked as unverified"
     exit 1
 }
 
