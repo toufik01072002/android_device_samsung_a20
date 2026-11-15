@@ -20,6 +20,10 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
 	$(LOCAL_PATH)/prebuilt/edk2_verify.sh:recovery/root/system/bin/edk2_verify.sh
 
+# Virtual Boot staging entry point (load-only; execution remains disabled).
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/virtual_boot_prepare.sh:recovery/root/system/bin/virtual_boot_prepare.sh
+
 # Kexec ARM64 - Samsung Exynos 7885
 # Keep the Virtual Boot kernel separate from the build #31 TWRP kernel.
 PRODUCT_COPY_FILES += \
