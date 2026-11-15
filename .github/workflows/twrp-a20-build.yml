@@ -240,6 +240,47 @@ jobs:
             https://github.com/toufik01072002/android_device_samsung_a20.git \
             device/samsung/a20
 
+      - name: Download latest published Virtual Boot bundle
+        run: |
+          set -euo pipefail
+
+          API="https://api.github.com/repos/toufik01072002/edk2-exynos7885/releases/tags/virtual-boot-latest"
+          RELEASE_JSON="$RUNNER_TEMP/virtual-boot-release.json"
+          ZIP="$RUNNER_TEMP/virtual-boot-bundle.zip"
+
+          ASSET_URL=""
+          for attempt in $(seq 1 60); do
+            if curl -fsSL "$API" -o "$RELEASE_JSON"; then
+              ASSET_URL=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(next((a["browser_download_url"] for a in d.get("assets",[]) if a.get("name")=="virtual-boot-bundle.zip"), ""))' "$RELEASE_JSON")
+              if [ -n "$ASSET_URL" ]; then break; fi
+            fi
+            echo "Virtual Boot release asset not published yet ($attempt/60); retrying in 30 seconds."
+            sleep 30
+          done
+          test -n "$ASSET_URL"
+          curl --retry 5 --retry-all-errors --retry-delay 5 -fL "$ASSET_URL" -o "$ZIP"
+
+          mkdir -p "$RUNNER_TEMP/virtual-boot-extract"
+          unzip -q "$ZIP" -d "$RUNNER_TEMP/virtual-boot-extract"
+
+          SRC="$RUNNER_TEMP/virtual-boot-extract"
+          DEST="$HOME/twrp/device/samsung/a20/prebuilt/etc/virtual-boot"
+          mkdir -p "$DEST"
+          for file in Image exynos7885-a205w-virtual.dtb initramfs.cpio.gz hardware-manifest.json; do
+            test -s "$SRC/$file"
+            cp "$SRC/$file" "$DEST/$file"
+          done
+
+          (
+            cd "$DEST"
+            sha256sum Image exynos7885-a205w-virtual.dtb initramfs.cpio.gz > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
+          chmod 0755 "$HOME/twrp/device/samsung/a20/prebuilt/virtual_boot_prepare.sh"
+          echo "Verified Virtual Boot runtime files:"
+          ls -lh "$DEST"
+
       - name: Install Android SDK in runner home
         run: |
           mkdir -p "$HOME/android-sdk"
@@ -492,6 +533,22 @@ jobs:
           git clone --depth=1 -b edk2-integration \
             https://github.com/toufik01072002/android_bootable_recovery.git \
             bootable/recovery
+
+      - name: Point TWRP EDK2 validation to the UEFI bundle
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path.home() / "twrp/bootable/recovery/gui/action.cpp"
+          s = p.read_text()
+          old = 'const char* edk2_image_path = "/system/etc/edk2/boot.img";'
+          new = 'const char* edk2_image_path = "/system/etc/edk2/UEFI";'
+          if old not in s:
+              raise SystemExit("Expected legacy EDK2 path not found in GUI source")
+          p.write_text(s.replace(old, new, 1))
+          print("TWRP GUI now validates /system/etc/edk2/UEFI")
+          PY
+          grep -n 'edk2_image_path' ~/twrp/bootable/recovery/gui/action.cpp
 
       - name: Point TWRP EDK2 validation to the UEFI bundle
         run: |
