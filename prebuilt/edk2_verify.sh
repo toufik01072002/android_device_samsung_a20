@@ -50,18 +50,33 @@ info "UEFI firmware volume signature found"
 # Virtual Boot preflight for the existing TWRP GUI action.
 # This is validation only: never invoke kexec -l, kexec -e, or reboot.
 KEXEC="/system/bin/kexec"
-KEXEC_KERNEL="/system/etc/kexec/Image"
-KEXEC_DTB="/system/etc/kexec/exynos7885.dtb"
+VIRTUAL_BOOT_DIR="/system/etc/virtual-boot"
+VB_KERNEL="$VIRTUAL_BOOT_DIR/Image"
+VB_DTB="$VIRTUAL_BOOT_DIR/exynos7885-a205w-virtual.dtb"
+VB_INITRAMFS="$VIRTUAL_BOOT_DIR/initramfs.cpio.gz"
+VB_MANIFEST="$VIRTUAL_BOOT_DIR/hardware-manifest.json"
+VB_PROVENANCE="$VIRTUAL_BOOT_DIR/handoff-producer-report.json"
 
 [ -x "$KEXEC" ] || error "KEXEC loader missing or not executable: $KEXEC"
-[ -s "$KEXEC_KERNEL" ] || error "Virtual Boot kernel missing or empty: $KEXEC_KERNEL"
-[ -s "$KEXEC_DTB" ] || error "Virtual Boot DTB missing or empty: $KEXEC_DTB"
-info "KEXEC loader, separate kernel, and DTB are present"
+for file in "$VB_KERNEL" "$VB_DTB" "$VB_INITRAMFS" "$VB_MANIFEST" "$VB_PROVENANCE" "$VIRTUAL_BOOT_DIR/SHA256SUMS"; do
+    [ -s "$file" ] || error "Virtual Boot bundle file missing or empty: $file"
+done
 
-KEXEC_KERNEL_SHA256=$(sha256sum "$KEXEC_KERNEL" | cut -d' ' -f1)
-KEXEC_DTB_SHA256=$(sha256sum "$KEXEC_DTB" | cut -d' ' -f1)
-[ -n "$KEXEC_KERNEL_SHA256" ] || error "Unable to calculate Virtual Boot kernel SHA256"
-[ -n "$KEXEC_DTB_SHA256" ] || error "Unable to calculate Virtual Boot DTB SHA256"
+grep -Eq '"platform"[[:space:]]*:[[:space:]]*"Samsung SM-A205W / Exynos 7885"' "$VB_MANIFEST" || error "Virtual Boot manifest targets another platform"
+grep -Eq '"architecture"[[:space:]]*:[[:space:]]*"AARCH64"' "$VB_MANIFEST" || error "Virtual Boot manifest architecture is not AARCH64"
+grep -Eq '"state"[[:space:]]*:[[:space:]]*"DISABLED"' "$VB_MANIFEST" || error "Virtual Boot handoff state must remain DISABLED"
+grep -Fq 'CONFIGURATION_CANDIDATES_ONLY_NOT_RUNTIME_RESERVATIONS' "$VB_MANIFEST" || error "Virtual Boot manifest no longer marks physical addresses as unverified"
+
+(
+    cd "$VIRTUAL_BOOT_DIR"
+    sha256sum -c SHA256SUMS >/dev/null 2>&1
+) || error "Virtual Boot bundle checksum verification failed"
+info "KEXEC loader and complete Virtual Boot bundle verified; handoff remains disabled"
+
+VB_KERNEL_SHA256=$(sha256sum "$VB_KERNEL" | cut -d' ' -f1)
+VB_DTB_SHA256=$(sha256sum "$VB_DTB" | cut -d' ' -f1)
+[ -n "$VB_KERNEL_SHA256" ] || error "Unable to calculate Virtual Boot kernel SHA256"
+[ -n "$VB_DTB_SHA256" ] || error "Unable to calculate Virtual Boot DTB SHA256"
 
 BUNDLE_SHA256=$(sha256sum UEFI | cut -d' ' -f1)
 [ -n "$BUNDLE_SHA256" ] || error "Unable to calculate bundle SHA256"
@@ -69,7 +84,7 @@ BUNDLE_SHA256=$(sha256sum UEFI | cut -d' ' -f1)
 echo "KERNEL_SIZE=$FILESIZE" > /tmp/edk2_verify_result
 echo "KERNEL_SHA256=$BUNDLE_SHA256" >> /tmp/edk2_verify_result
 echo "VIRTUAL_BOOT_PREFLIGHT=PASS" >> /tmp/edk2_verify_result
-echo "VIRTUAL_BOOT_KERNEL_SHA256=$KEXEC_KERNEL_SHA256" >> /tmp/edk2_verify_result
-echo "VIRTUAL_BOOT_DTB_SHA256=$KEXEC_DTB_SHA256" >> /tmp/edk2_verify_result
+echo "VIRTUAL_BOOT_KERNEL_SHA256=$VB_KERNEL_SHA256" >> /tmp/edk2_verify_result
+echo "VIRTUAL_BOOT_DTB_SHA256=$VB_DTB_SHA256" >> /tmp/edk2_verify_result
 info "EDK2 bundle and Virtual Boot preflight validation PASSED"
 exit 0
