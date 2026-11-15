@@ -245,6 +245,7 @@ jobs:
           grep -Fqx 'TARGET_PREBUILT_KERNEL := $(LOCAL_PATH)/prebuilt/Image' BoardConfig.mk
           test -s prebuilt/Image
           test -s prebuilt/kexec/Image
+          grep -Fqx '    $(LOCAL_PATH)/prebuilt/kexec/Image:recovery/root/system/etc/kexec/Image \' device.mk
           if grep -Fq 'TARGET_PREBUILT_KERNEL := $(LOCAL_PATH)/prebuilt/kexec/Image' BoardConfig.mk; then
             echo "::error::Virtual Boot kernel must not be selected as the TWRP recovery kernel."
             exit 1
