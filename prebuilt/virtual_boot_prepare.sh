@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # Stage the SM-A205W Virtual Boot kernel in RAM only.
-# This script deliberately never executes kexec or reboots the device.
+# This script loads the next kernel into RAM only; it never executes that kernel or reboots.
 set -eu
 
 LOG=/tmp/virtual_boot_prepare.log
