@@ -236,9 +236,20 @@ jobs:
         run: |
           cd ~/twrp
           mkdir -p device/samsung
-          git clone --depth=1 -b android-11 \
+          git clone --depth=1 -b "${GITHUB_REF_NAME}" \
             https://github.com/toufik01072002/android_device_samsung_a20.git \
             device/samsung/a20
+
+          cd device/samsung/a20
+          echo "===== Preserve build #31 recovery kernel ====="
+          grep -Fqx 'TARGET_PREBUILT_KERNEL := $(LOCAL_PATH)/prebuilt/Image' BoardConfig.mk
+          test -s prebuilt/Image
+          test -s prebuilt/kexec/Image
+          if grep -Fq 'TARGET_PREBUILT_KERNEL := $(LOCAL_PATH)/prebuilt/kexec/Image' BoardConfig.mk; then
+            echo "::error::Virtual Boot kernel must not be selected as the TWRP recovery kernel."
+            exit 1
+          fi
+          echo "Recovery kernel and Virtual Boot kernel remain separate."
 
       - name: Install Android SDK in runner home
         run: |
