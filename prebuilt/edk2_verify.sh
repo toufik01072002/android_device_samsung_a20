@@ -44,6 +44,22 @@ if ! dd if="$BUNDLE" bs=1 skip=65536 count=2097152 2>/dev/null | grep -a -q "_FV
 fi
 info "UEFI firmware volume signature found"
 
+# Virtual Boot preflight for the existing TWRP GUI action.
+# This is validation only: never invoke kexec -l, kexec -e, or reboot.
+KEXEC="/system/bin/kexec"
+KEXEC_KERNEL="/system/etc/kexec/Image"
+KEXEC_DTB="/system/etc/kexec/exynos7885.dtb"
+
+[ -x "$KEXEC" ] || error "KEXEC loader missing or not executable: $KEXEC"
+[ -s "$KEXEC_KERNEL" ] || error "Virtual Boot kernel missing or empty: $KEXEC_KERNEL"
+[ -s "$KEXEC_DTB" ] || error "Virtual Boot DTB missing or empty: $KEXEC_DTB"
+info "KEXEC loader, separate kernel, and DTB are present"
+
+KEXEC_KERNEL_SHA256=$(sha256sum "$KEXEC_KERNEL" | cut -d' ' -f1)
+KEXEC_DTB_SHA256=$(sha256sum "$KEXEC_DTB" | cut -d' ' -f1)
+[ -n "$KEXEC_KERNEL_SHA256" ] || error "Unable to calculate Virtual Boot kernel SHA256"
+[ -n "$KEXEC_DTB_SHA256" ] || error "Unable to calculate Virtual Boot DTB SHA256"
+
 BUNDLE_SHA256=$(sha256sum UEFI | cut -d' ' -f1)
 [ -n "$BUNDLE_SHA256" ] || error "Unable to calculate bundle SHA256"
 # Compatibility keys consumed by the existing TWRP GUI action.
