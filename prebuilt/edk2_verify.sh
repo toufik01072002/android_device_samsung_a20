@@ -2,6 +2,9 @@
 # Read-only validation of the 7K-EDK2-BUNDLE in the SM-A205W recovery ramdisk.
 # Fail closed. This script never writes to boot, recovery, or vbmeta.
 
+# Remove stale output first: a failed run must never leave an old PASS behind.
+rm -f /tmp/edk2_verify_result
+
 EDK2_DIR="/system/etc/edk2"
 BUNDLE="$EDK2_DIR/UEFI"
 EXPECTED_BUNDLE_SIZE=2228224
