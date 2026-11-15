@@ -248,6 +248,13 @@ jobs:
           grep -Fqx '    $(LOCAL_PATH)/prebuilt/kexec/Image:recovery/root/system/etc/kexec/Image \\' device.mk
           test -s prebuilt/edk2_verify.sh
           sh -n prebuilt/edk2_verify.sh
+          test -s prebuilt/virtual_boot_prepare.sh
+          sh -n prebuilt/virtual_boot_prepare.sh
+          grep -Fq '"$KEXEC" -l "$IMAGE"' prebuilt/virtual_boot_prepare.sh
+          if grep -Fq '"$KEXEC" -e' prebuilt/virtual_boot_prepare.sh || grep -Eq '(^|[[:space:]])reboot([[:space:]]|$)' prebuilt/virtual_boot_prepare.sh; then
+            echo "::error::Virtual Boot staging must not execute the loaded kernel or reboot."
+            exit 1
+          fi
           grep -Fq 'KEXEC_KERNEL="/system/etc/kexec/Image"' prebuilt/edk2_verify.sh
           grep -Fq 'KEXEC_DTB="/system/etc/kexec/exynos7885.dtb"' prebuilt/edk2_verify.sh
           grep -Fq 'VIRTUAL_BOOT_PREFLIGHT=PASS' prebuilt/edk2_verify.sh
@@ -598,6 +605,9 @@ jobs:
           test -s system/etc/edk2/UEFI.sec-manifest.json
           test -s system/etc/edk2/SHA256SUMS
           test -s system/bin/edk2_verify.sh
+          test -s system/bin/virtual_boot_prepare.sh
+          sh -n system/bin/edk2_verify.sh
+          sh -n system/bin/virtual_boot_prepare.sh
           (cd system/etc/edk2 && sha256sum -c SHA256SUMS)
 
           echo "SUCCESS: EDK2 files verified in recovery ramdisk"
