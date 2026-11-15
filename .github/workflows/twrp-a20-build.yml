@@ -251,6 +251,7 @@ jobs:
           grep -Fq 'KEXEC_KERNEL="/system/etc/kexec/Image"' prebuilt/edk2_verify.sh
           grep -Fq 'KEXEC_DTB="/system/etc/kexec/exynos7885.dtb"' prebuilt/edk2_verify.sh
           grep -Fq 'VIRTUAL_BOOT_PREFLIGHT=PASS' prebuilt/edk2_verify.sh
+          grep -Fq 'rm -f /tmp/edk2_verify_result' prebuilt/edk2_verify.sh
           if grep -Fq '"$KEXEC" -l' prebuilt/edk2_verify.sh || grep -Fq '"$KEXEC" -e' prebuilt/edk2_verify.sh; then
             echo "::error::The EDK2 button preflight must never execute KEXEC."
             exit 1
@@ -513,6 +514,13 @@ jobs:
           git clone --depth=1 -b edk2-integration \
             https://github.com/toufik01072002/android_bootable_recovery.git \
             bootable/recovery
+
+          echo "===== Verify GUI consumes Virtual Boot preflight ====="
+          grep -Fq 'VIRTUAL_BOOT_PREFLIGHT=' bootable/recovery/gui/action.cpp
+          grep -Fq 'tw_virtual_boot_preflight' bootable/recovery/gui/action.cpp
+          grep -Fq 'tw_virtual_boot_kernel_sha256' bootable/recovery/gui/action.cpp
+          grep -Fq 'tw_virtual_boot_dtb_sha256' bootable/recovery/gui/action.cpp
+          grep -Fq 'Fresh verification result file not found' bootable/recovery/gui/action.cpp
 
       - name: Point TWRP EDK2 validation to the UEFI bundle
         run: |
