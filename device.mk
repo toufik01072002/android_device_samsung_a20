@@ -24,6 +24,15 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/virtual_boot_prepare.sh:recovery/root/system/bin/virtual_boot_prepare.sh
 
+# Virtual Boot diagnostic Linux bundle built by the reusable EDK2 workflow.
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/etc/virtual-boot/Image:recovery/root/system/etc/virtual-boot/Image \
+    $(LOCAL_PATH)/prebuilt/etc/virtual-boot/exynos7885-a205w-virtual.dtb:recovery/root/system/etc/virtual-boot/exynos7885-a205w-virtual.dtb \
+    $(LOCAL_PATH)/prebuilt/etc/virtual-boot/initramfs.cpio.gz:recovery/root/system/etc/virtual-boot/initramfs.cpio.gz \
+    $(LOCAL_PATH)/prebuilt/etc/virtual-boot/hardware-manifest.json:recovery/root/system/etc/virtual-boot/hardware-manifest.json \
+    $(LOCAL_PATH)/prebuilt/etc/virtual-boot/handoff-producer-report.json:recovery/root/system/etc/virtual-boot/handoff-producer-report.json \
+    $(LOCAL_PATH)/prebuilt/etc/virtual-boot/SHA256SUMS:recovery/root/system/etc/virtual-boot/SHA256SUMS
+
 # Kexec ARM64 - Samsung Exynos 7885
 # Keep the Virtual Boot kernel separate from the build #31 TWRP kernel.
 PRODUCT_COPY_FILES += \
