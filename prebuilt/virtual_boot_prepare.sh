@@ -1,6 +1,6 @@
 #!/system/bin/sh
-# Stage the SM-A205W Virtual Boot kernel in RAM only.
-# This script loads the next kernel into RAM only; it never executes that kernel or reboots.
+# Validate the SM-A205W Virtual Boot bundle without loading or executing it.
+# The current memory map and handoff are unvalidated; KEXEC loading stays blocked.
 set -eu
 
 LOG=/tmp/virtual_boot_prepare.log
@@ -51,15 +51,10 @@ grep -Fq 'CONFIGURATION_CANDIDATES_ONLY_NOT_RUNTIME_RESERVATIONS' "$MANIFEST" ||
     sha256sum -c SHA256SUMS
 )
 
-echo "[Virtual Boot] Bundle hashes verified"
-echo "[Virtual Boot] Requesting load-only kexec staging"
+echo "[Virtual Boot] Bundle hashes and hardware manifest verified"
+echo "[Virtual Boot] KEXEC load is blocked until memory-map and handoff gates are validated."
 
-# -l only loads the next kernel into RAM. No -e, reboot, or partition writes.
-"$KEXEC" -l "$IMAGE" \
-    --dtb="$DTB" \
-    --initrd="$INITRD" \
-    --command-line="rdinit=/init loglevel=7"
-
-echo "VIRTUAL_BOOT_STAGED=1"
-echo "Virtual Boot kernel, DTB and initramfs staged in RAM."
-echo "Execution intentionally remains disabled."
+# Do not invoke kexec -l, kexec -e, reboot, or write any partition.
+echo "VIRTUAL_BOOT_READY=1"
+echo "VIRTUAL_BOOT_KEXEC_LOAD=BLOCKED"
+echo "VIRTUAL_BOOT_HANDOFF=DISABLED"
