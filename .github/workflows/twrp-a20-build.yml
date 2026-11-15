@@ -251,7 +251,7 @@ jobs:
           grep -Fq 'KEXEC_KERNEL="/system/etc/kexec/Image"' prebuilt/edk2_verify.sh
           grep -Fq 'KEXEC_DTB="/system/etc/kexec/exynos7885.dtb"' prebuilt/edk2_verify.sh
           grep -Fq 'VIRTUAL_BOOT_PREFLIGHT=PASS' prebuilt/edk2_verify.sh
-          if grep -Eq '^[[:space:]]*"\\$KEXEC"[[:space:]]+(-l|-e)([[:space:]]|$)' prebuilt/edk2_verify.sh; then
+          if grep -Fq '"$KEXEC" -l' prebuilt/edk2_verify.sh || grep -Fq '"$KEXEC" -e' prebuilt/edk2_verify.sh; then
             echo "::error::The EDK2 button preflight must never execute KEXEC."
             exit 1
           fi
