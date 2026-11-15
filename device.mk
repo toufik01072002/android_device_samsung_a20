@@ -21,7 +21,9 @@ PRODUCT_COPY_FILES += \
 	$(LOCAL_PATH)/prebuilt/edk2_verify.sh:recovery/root/system/bin/edk2_verify.sh
 
 # Kexec ARM64 - Samsung Exynos 7885
+# Keep the Virtual Boot kernel separate from the build #31 TWRP kernel.
 PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/kexec/Image:recovery/root/system/etc/kexec/Image \
     $(LOCAL_PATH)/prebuilt/kexec/exynos7885.dtb:recovery/root/system/etc/kexec/exynos7885.dtb \
     $(LOCAL_PATH)/prebuilt/kexec/kexec:recovery/root/system/bin/kexec
 
