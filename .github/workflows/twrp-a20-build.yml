@@ -260,7 +260,10 @@ jobs:
           test -s prebuilt/kexec/Image
           grep -Fqx '    $(LOCAL_PATH)/prebuilt/kexec/Image:recovery/root/system/etc/kexec/Image \\' device.mk
           grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/Image:recovery/root/system/etc/virtual-boot/Image' device.mk
+          grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/exynos7885-a205w-virtual.dtb:recovery/root/system/etc/virtual-boot/exynos7885-a205w-virtual.dtb' device.mk
           grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/initramfs.cpio.gz:recovery/root/system/etc/virtual-boot/initramfs.cpio.gz' device.mk
+          grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/hardware-manifest.json:recovery/root/system/etc/virtual-boot/hardware-manifest.json' device.mk
+          grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/handoff-producer-report.json:recovery/root/system/etc/virtual-boot/handoff-producer-report.json' device.mk
           grep -Fq '$(LOCAL_PATH)/prebuilt/etc/virtual-boot/SHA256SUMS:recovery/root/system/etc/virtual-boot/SHA256SUMS' device.mk
           test -s prebuilt/edk2_verify.sh
           sh -n prebuilt/edk2_verify.sh
