@@ -13,6 +13,11 @@ on:
         required: false
         default: "integrate/fd-sec-contract"
         type: string
+      recovery_ref:
+        description: "Branche TWRP recovery à intégrer"
+        required: false
+        default: "edk2-integration"
+        type: string
   pull_request:
     branches:
       - android-11
@@ -563,7 +568,7 @@ jobs:
         run: |
           cd ~/twrp
           rm -rf bootable/recovery
-          git clone --depth=1 -b edk2-integration \
+          git clone --depth=1 -b "${{ inputs.recovery_ref || 'edk2-integration' }}" \
             https://github.com/toufik01072002/android_bootable_recovery.git \
             bootable/recovery
 
@@ -574,6 +579,10 @@ jobs:
           grep -Fq 'tw_virtual_boot_dtb_sha256' bootable/recovery/gui/action.cpp
           grep -Fq 'Fresh verification result file not found' bootable/recovery/gui/action.cpp
           grep -Fq 'Virtual Boot bundle validated. KEXEC loading and handoff remain disabled.' bootable/recovery/gui/action.cpp
+          grep -Fq 'Test Virtual Boot preparation' bootable/recovery/gui/theme/common/portrait.xml
+          grep -Fq 'This test does not transfer control to EDK2.' bootable/recovery/gui/theme/common/portrait.xml
+          grep -Fq 'Test Virtual Boot preparation' bootable/recovery/gui/theme/common/landscape.xml
+          grep -Fq 'This test does not transfer control to EDK2.' bootable/recovery/gui/theme/common/landscape.xml
 
       - name: Point TWRP EDK2 validation to the UEFI bundle
         run: |
