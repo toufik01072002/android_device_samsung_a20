@@ -20,6 +20,10 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
 	$(LOCAL_PATH)/prebuilt/edk2_verify.sh:recovery/root/system/bin/edk2_verify.sh
 
+# Read-only command test harness for EDK2 / Virtual Boot interfaces
+PRODUCT_COPY_FILES += \
+	$(LOCAL_PATH)/prebuilt/edk2_command_test.sh:recovery/root/system/bin/edk2_command_test.sh
+
 # Virtual Boot staging entry point (load-only; execution remains disabled).
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/virtual_boot_prepare.sh:recovery/root/system/bin/virtual_boot_prepare.sh
