@@ -16,7 +16,7 @@ on:
       recovery_ref:
         description: "Branche TWRP recovery à intégrer"
         required: false
-        default: "edk2-integration"
+        default: "test/edk2-staging-ui"
         type: string
   pull_request:
     branches:
@@ -568,7 +568,7 @@ jobs:
         run: |
           cd ~/twrp
           rm -rf bootable/recovery
-          git clone --depth=1 -b "${{ inputs.recovery_ref || 'edk2-integration' }}" \
+          git clone --depth=1 -b "${{ inputs.recovery_ref || 'test/edk2-staging-ui' }}" \
             https://github.com/toufik01072002/android_bootable_recovery.git \
             bootable/recovery
 
