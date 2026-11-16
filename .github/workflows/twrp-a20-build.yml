@@ -269,6 +269,14 @@ jobs:
           sh -n prebuilt/edk2_verify.sh
           test -s prebuilt/virtual_boot_prepare.sh
           sh -n prebuilt/virtual_boot_prepare.sh
+          test -s prebuilt/edk2_command_test.sh
+          sh -n prebuilt/edk2_command_test.sh
+          grep -Fq 'SAFETY=READ_ONLY_NO_PARTITION_WRITES' prebuilt/edk2_command_test.sh
+          grep -Fq 'BOOTSHIM_EXECUTION=NOT_ATTEMPTED' prebuilt/edk2_command_test.sh
+          if grep -Eq '(^|[[:space:]])kexec[[:space:]]+(-l|-e)|(^|[[:space:]])reboot([[:space:]]|$)' prebuilt/edk2_command_test.sh; then
+            echo "::error::Command test harness must remain validation-only."
+            exit 1
+          fi
           grep -Fq 'VIRTUAL_BOOT_READY=1' prebuilt/virtual_boot_prepare.sh
           grep -Fq 'VIRTUAL_BOOT_KEXEC_LOAD=BLOCKED' prebuilt/virtual_boot_prepare.sh
           grep -Fq 'VIRTUAL_BOOT_HANDOFF=DISABLED' prebuilt/virtual_boot_prepare.sh
@@ -644,8 +652,10 @@ jobs:
           test -s system/etc/edk2/SHA256SUMS
           test -s system/bin/edk2_verify.sh
           test -s system/bin/virtual_boot_prepare.sh
+          test -s system/bin/edk2_command_test.sh
           sh -n system/bin/edk2_verify.sh
           sh -n system/bin/virtual_boot_prepare.sh
+          sh -n system/bin/edk2_command_test.sh
           (cd system/etc/edk2 && sha256sum -c SHA256SUMS)
 
           echo "===== Verify Virtual Boot runtime bundle in recovery ramdisk ====="
